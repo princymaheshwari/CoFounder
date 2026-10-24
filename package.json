@@ -1,0 +1,51 @@
+{
+  "name": "cofounder",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "convex dev --start \"vite --open\"",
+    "dev:frontend": "vite",
+    "dev:backend": "convex dev",
+    "typecheck": "tsc -b && tsc -p convex",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "npm run typecheck && vite build",
+    "lint": "npm run typecheck && eslint . --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@convex-dev/aggregate": "^0.3.4",
+    "@convex-dev/ai-sdk-provider": "^0.3.0",
+    "@convex-dev/rate-limiter": "^0.4.2",
+    "@convex-dev/workflow": "^0.4.10",
+    "@convex-dev/workpool": "^0.4.14",
+    "ai": "^7.0.153",
+    "convex": "^1.44.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@convex-dev/eslint-plugin": "^5.0.0",
+    "@edge-runtime/vm": "^5.0.0",
+    "@eslint/js": "^9.39.5",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "@vitejs/plugin-react": "^6.0.5",
+    "convex-test": "^0.0.65",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-eslint": "^8.66.0",
+    "vite": "^8.2.0",
+    "vitest": "^5.0.5"
+  }
+}
