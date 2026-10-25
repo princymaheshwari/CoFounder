@@ -20,6 +20,7 @@ import {
   type MirrorRow,
   type NessieObject,
 } from "./lib/nessie";
+import { currentBudget } from "./gate";
 import { DAY_MS } from "./lib/co";
 import { vLedgerKind } from "./lib/types";
 import { nessieCreate, nessieGet, nessieList, nessieUpdate } from "./nessieApi";
@@ -519,6 +520,24 @@ const vBegin = v.union(
 // lists them twice. Checked inside beginExecution, so concurrent executions serialize on it.
 const REFUND_GUARD_DAYS = 30;
 
+// The gate (on allow) or the founder's approval debited the action's full amount; items the guard skips are
+// never paid, so their amount goes back to the current budget period. Each marker is credited once (resumes re-skip).
+async function creditSkipped(ctx: MutationCtx, action: Doc<"actions">, items: ExecItem[], markers: string[]): Promise<void> {
+  const scope = CATALOG[action.type].budgetScope;
+  if (!scope) return;
+  const credited = new Set(
+    (await ctx.db.query("audit_log").withIndex("by_ref", (q) => q.eq("ref", action.task)).take(1000))
+      .filter((r) => r.kind === "budget_credit" && (r.detail as { actionId?: string } | null)?.actionId === action._id)
+      .flatMap((r) => (r.detail as { markers: string[] }).markers),
+  );
+  const fresh = markers.filter((m) => !credited.has(m));
+  const cents = items.filter((i) => fresh.includes(i.marker)).reduce((n, i) => n + i.amount_cents, 0);
+  if (!cents) return;
+  const budget = await currentBudget(ctx, scope, Date.now());
+  if (budget) await ctx.db.patch(budget._id, { spent_cents: Math.max(0, budget.spent_cents - cents) });
+  await audit(ctx, { actor: "nessie", kind: "budget_credit", ref: action.task, detail: { actionId: action._id, scope, markers: fresh, cents } });
+}
+
 async function refundConflicts(ctx: MutationCtx, action: Doc<"actions">, items: ExecItem[], op: string): Promise<Map<string, { to_account: string; reason: string }>> {
   const skips = new Map<string, { to_account: string; reason: string }>();
   const ownPrefix = `act-${action._id}-`;
@@ -592,6 +611,7 @@ export const beginExecution = internalMutation({
     const run = items.filter((i) => !conflicts.has(i.marker));
     if (skipped.length) {
       await audit(ctx, { actor: "nessie", kind: "execution_skipped_items", ref: action.task, detail: { actionId, skipped } });
+      await creditSkipped(ctx, action, items, skipped.map((x) => x.marker));
     }
     if (!run.some((i) => !done.includes(i.marker)) && done.length === 0) {
       // Nothing left to pay: not a capability failure, so no ISSUE; the thread says why.
@@ -639,12 +659,21 @@ export const finishExecution = internalMutation({
     const task = await ctx.db.get(action.task);
     if (task) {
       const what = action.type === "pay_bill" ? `bill ${refs[0]}` : refs.length === 1 ? `transfer ${refs[0]}` : `${refs.length} transfers`;
+      let paid = 0;
+      for (const id of refs) {
+        const row = await ctx.db
+          .query("ledger_mirror")
+          .withIndex("by_nessie_id", (q) => q.eq("nessie_id", id))
+          .unique();
+        paid += row?.amount_cents ?? 0;
+      }
+      const amount = action.amount_cents === undefined ? "" : paid && paid !== action.amount_cents ? ` ${dollars(paid)} of ${dollars(action.amount_cents)}` : ` ${dollars(action.amount_cents)}`;
       await appendMessage(ctx, {
         room: task.room,
         task: task._id,
         sender_kind: "system",
         sender_name: "Dispatcher",
-        text: `[Dispatcher] Executed ${action.type}${action.amount_cents !== undefined ? ` ${dollars(action.amount_cents)}` : ""} in Nessie (${what}).${
+        text: `[Dispatcher] Executed ${action.type}${amount} in Nessie (${what}).${
           skipped?.length ? ` Skipped ${skipped.length} to avoid a double refund: ${skipped.join("; ")}.` : ""
         }`,
       });

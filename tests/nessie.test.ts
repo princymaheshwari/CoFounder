@@ -20,6 +20,7 @@ import {
 } from "../convex/lib/nessie";
 import type { ActionType } from "../convex/lib/types";
 import { FakeNessie } from "./fakes/nessie";
+import { laDate } from "../convex/lib/time";
 import { HISTORY_DAYS, INCIDENT_DATE, OPERATING, PLAN_CENTS, SEED_ANCHOR, buildSeedPlan } from "../convex/seedData";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -446,6 +447,10 @@ describe("executeMoneyAction", () => {
 
     const items = [a, b, b, c, d].map((x) => ({ customer_id: x._id, amount_cents: 3500 }));
     const batch = await action(t, taskId, "refund_batch", { items, reason: "billing_error" }, "allowed", "allow");
+    await t.run(async (ctx) => {
+      await ctx.db.patch(batch, { amount_cents: 17_500 });
+      await ctx.db.insert("budgets", { scope: "company:refund", period: laDate(Date.now()), limit_cents: 30_000, spent_cents: 17_500 });
+    });
     const before = fake.transfersOf(op).length;
     const r = await t.action(internal.nessie.executeMoneyAction, { actionId: batch });
     expect(r.status).toBe("executed");
@@ -461,7 +466,10 @@ describe("executeMoneyAction", () => {
     expect(reasons[1]).toBe("listed twice in this batch");
     expect(reasons[2]).toMatch(/^a refund is in flight in action /);
     const msgs = await t.run((ctx) => ctx.db.query("messages").withIndex("by_task", (q) => q.eq("task", taskId)).collect());
-    expect(msgs.at(-1)!.text).toContain("Skipped 3 to avoid a double refund");
+    expect(msgs.at(-1)!.text).toContain("Executed refund_batch $70.00 of $175.00 in Nessie (2 transfers). Skipped 3 to avoid a double refund");
+    // The 3 skipped items ($105) go back to today's budget, once.
+    const budget = await t.run((ctx) => ctx.db.query("budgets").withIndex("by_scope_period", (q) => q.eq("scope", "company:refund").eq("period", laDate(Date.now()))).unique());
+    expect(budget!.spent_cents).toBe(7_000);
   });
 
   test("non-Nessie actions are refused", async () => {
