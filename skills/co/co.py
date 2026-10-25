@@ -13,6 +13,7 @@ prints {"error": "..."} and exits 1.
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -37,6 +38,16 @@ class Parser(argparse.ArgumentParser):
         fail(f"{message}. {self.format_usage().strip()}")
 
 
+def site_url(raw):
+    # Tolerates a pasted "COFOUNDER_URL = https://…", quotes or whitespace around the URL.
+    if not raw:
+        fail("COFOUNDER_URL is not set (Creao secret with the Convex site URL)")
+    m = re.search(r"https?://[^\s'\"]+", raw)
+    if not m:
+        fail(f"COFOUNDER_URL is not a URL: {raw[:80]!r}; set it to the Convex site URL, e.g. https://<name>.convex.site")
+    return m.group(0).rstrip("/")
+
+
 def call(base, token, method, path, query=None, body=None):
     url = base.rstrip("/") + path
     if query:
@@ -46,13 +57,13 @@ def call(base, token, method, path, query=None, body=None):
     if body is not None:
         data = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as res:
             status, raw = res.status, res.read()
     except urllib.error.HTTPError as e:
         status, raw = e.code, e.read()
-    except (urllib.error.URLError, OSError) as e:
+    except (urllib.error.URLError, OSError, ValueError) as e:
         fail(f"cannot reach Cofounder at {base}: {getattr(e, 'reason', e)}")
     try:
         payload = json.loads(raw.decode("utf-8")) if raw else None
@@ -95,9 +106,7 @@ def main(argv=None):
         fail("missing --token: pass the token from your ASSIGN's cofounder block")
     if token == PLACEHOLDER:
         fail("--token is the placeholder; pass the real token from your ASSIGN's cofounder block")
-    base = getattr(args, "url", None) or os.environ.get("COFOUNDER_URL")
-    if not base:
-        fail("COFOUNDER_URL is not set (Creao secret with the Convex site URL)")
+    base = site_url(getattr(args, "url", None) or os.environ.get("COFOUNDER_URL"))
 
     if args.command == "data":
         result = call(base, token, "GET", "/co/data", {"view": args.view, "id": args.id, "limit": args.limit, "since": args.since})
