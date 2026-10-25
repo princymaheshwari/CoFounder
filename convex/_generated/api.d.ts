@@ -15,6 +15,7 @@ import type * as creao_verify from "../creao/verify.js";
 import type * as creao_verifyData from "../creao/verifyData.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as lib_envelope from "../lib/envelope.js";
 import type * as lib_types from "../lib/types.js";
 import type * as seed from "../seed.js";
 
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   "creao/verifyData": typeof creao_verifyData;
   health: typeof health;
   http: typeof http;
+  "lib/envelope": typeof lib_envelope;
   "lib/types": typeof lib_types;
   seed: typeof seed;
 }>;
