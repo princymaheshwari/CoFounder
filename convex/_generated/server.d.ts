@@ -33,8 +33,7 @@ type Env = {
   readonly APIFY_TOKEN: string | undefined;
   readonly APIFY_WEBHOOK_TOKEN: string | undefined;
   readonly CO_TOKEN_SECRET: string | undefined;
-  readonly CREAO_DISPATCHER_KEY: string | undefined;
-  readonly CREAO_OWNER_KEY: string | undefined;
+  readonly CREAO_API_KEY: string | undefined;
   readonly CREAO_WEBHOOK_TOKEN: string | undefined;
   readonly NESSIE_API_KEY: string | undefined;
 };

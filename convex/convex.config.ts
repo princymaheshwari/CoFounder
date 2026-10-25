@@ -9,8 +9,7 @@ import aggregate from "@convex-dev/aggregate/convex.config.js";
 // Set with `npx convex env set NAME value` or scripts/set-env.sh.
 const app = defineApp({
   env: {
-    CREAO_DISPATCHER_KEY: v.optional(v.string()),
-    CREAO_OWNER_KEY: v.optional(v.string()),
+    CREAO_API_KEY: v.optional(v.string()),
     CREAO_WEBHOOK_TOKEN: v.optional(v.string()),
     NESSIE_API_KEY: v.optional(v.string()),
     APIFY_TOKEN: v.optional(v.string()),
