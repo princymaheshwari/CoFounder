@@ -19,6 +19,7 @@ import {
 import { ruleInScope } from "./lib/rules";
 import { TOKEN_TTL_MS, hashToken, signTaskToken } from "./lib/tokens";
 import { vRunPurpose, vRunStatus, type Department, type RunPurpose, type RunStatus } from "./lib/types";
+import { onExecutorResult } from "./executor";
 import { onAgentReply, onRunFailed } from "./tasks";
 
 // Dispatcher (spec 04): starts agent runs through the Creao API Trigger and records each task's
@@ -335,8 +336,14 @@ export const recordReply = internalMutation({
     if (TERMINAL.includes(run.status)) return null; // already recorded (duplicate webhook or poll)
     await ctx.db.patch(run._id, { status: a.status, finished_at: Date.now(), error_code: a.errorCode });
 
-    // Executor results are handled by spec 10 (onExecutorResult).
-    if (run.purpose === "execute" || !run.task) {
+    // Executor runs (spec 10): the action, not a task, owns the result.
+    if (run.purpose === "execute") {
+      await ctx.db.patch(run._id, { result_raw: { text: a.text.slice(0, 8000) } }); // the Executor's report, for the audit trail
+      await audit(ctx, { actor: "dispatcher", kind: "run_finished", ref: a.runId, detail: { status: a.status, purpose: "execute" } });
+      await onExecutorResult(ctx, run, a.status, a.text, a.errorCode);
+      return null;
+    }
+    if (!run.task) {
       await audit(ctx, { actor: "dispatcher", kind: "run_finished", ref: a.runId, detail: { status: a.status } });
       return null;
     }

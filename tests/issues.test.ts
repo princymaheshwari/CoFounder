@@ -26,6 +26,8 @@ let runs = 0;
 let nessie: FakeNessie;
 beforeEach(() => {
   vi.useFakeTimers();
+  // Midday in Los Angeles, so draining timers never crosses into the next budget day.
+  vi.setSystemTime(new Date("2026-10-24T19:00:00Z"));
   vi.stubEnv("CREAO_API_KEY", "capi_test");
   vi.stubEnv("CREAO_WEBHOOK_TOKEN", "hook_secret");
   vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
@@ -343,7 +345,17 @@ describe("flow A", () => {
     const [refundBatch, fileBug] = await t.run((ctx) => ctx.db.query("actions").withIndex("by_task", (q) => q.eq("task", fm._id)).collect());
     expect(refundBatch).toMatchObject({ status: "executed" });
     expect(refundBatch.executed_ref).toHaveLength(12);
-    expect(fileBug).toMatchObject({ status: "approved" });
+    // The approved bug goes to the Executor (spec 10): one run, then its Linear URL lands on the action.
+    expect(fileBug).toMatchObject({ status: "executing" });
+    const execRun = (await t.run((ctx) => ctx.db.query("runs").collect())).find((r) => r.purpose === "execute")!;
+    expect(execRun).toMatchObject({ role: "executor", action: fileBug._id, idempotency_key: `${fileBug._id}:execute:1` });
+    const linear = "https://linear.app/lumen/issue/LUM-42";
+    await t.mutation(internal.dispatcher.recordReply, {
+      runId: execRun.creao_run_id,
+      status: "completed",
+      text: wrap({ type: "REPORT", task: fileBug._id, from: "executor", summary: "executed", findings: [{ claim: "executed", evidence: linear }] }),
+    });
+    expect((await t.run((ctx) => ctx.db.get(fileBug._id)))!).toMatchObject({ status: "executed", executed_ref: [linear] });
     const budget = await t.run((ctx) => ctx.db.query("budgets").collect());
     expect(budget[0]).toMatchObject({ scope: "company:refund", spent_cents: 42_000 });
     const decisions = await t.run((ctx) => ctx.db.query("decisions").collect());

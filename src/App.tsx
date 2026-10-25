@@ -1,5 +1,6 @@
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
+import Activity from "./pages/Activity";
 import Inbox from "./pages/Inbox";
 
 // Placeholder until the founder app pages land (docs/specs/14-founder-app.md).
@@ -19,6 +20,7 @@ export default function App() {
             : "error"}
       </p>
       <Inbox />
+      <Activity />
     </main>
   );
 }

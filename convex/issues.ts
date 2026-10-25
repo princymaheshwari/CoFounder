@@ -1,8 +1,8 @@
-import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { appendMessage, audit } from "./channels";
 import { assign, rerun } from "./dispatcher";
+import { scheduleExecution } from "./executor";
 import { currentBudget, customerFor, gateAction } from "./gate";
 import { CATALOG } from "./lib/catalog";
 import { CO_VIEWS, DAY_MS, canRead } from "./lib/co";
@@ -503,8 +503,7 @@ export async function recordFounderDecision(
       const budget = await currentBudget(ctx, entry.budgetScope, now);
       if (budget) await ctx.db.patch(budget._id, { spent_cents: budget.spent_cents + action.amount_cents });
     }
-    if (entry.executor === "nessie") await ctx.scheduler.runAfter(0, internal.nessie.executeMoneyAction, { actionId: id });
-    else await audit(ctx, { actor: "founder", kind: "execution_pending", ref: action.task, detail: { actionId: id, executor: entry.executor } });
+    await scheduleExecution(ctx, (await ctx.db.get(id))!, "founder");
   }
   if (issue) {
     await ctx.db.insert("decisions", {

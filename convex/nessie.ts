@@ -401,7 +401,7 @@ type ExecItem = Infer<typeof vExecItem>;
 class PlanError extends Error {}
 
 // The founder approved this specific action (spec 09 writes the decision before setting `approved`).
-async function founderApproved(ctx: MutationCtx, action: Doc<"actions">): Promise<boolean> {
+export async function founderApproved(ctx: MutationCtx, action: Doc<"actions">): Promise<boolean> {
   const decisions = await ctx.db
     .query("decisions")
     .withIndex("by_action_type", (q) => q.eq("action_type", action.type))

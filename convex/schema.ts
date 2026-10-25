@@ -293,6 +293,15 @@ export default defineSchema({
     created_at: v.number(),
   }).index("by_status", ["status"]),
 
+  // Mock outbox (spec 10): connector actions whose connector is not connected to the Executor.
+  outbox: defineTable({
+    action: v.id("actions"),
+    connector: v.union(v.literal("linear"), v.literal("gmail"), v.literal("calendar")),
+    payload: v.any(),
+    reason: v.string(),
+    created_at: v.number(),
+  }).index("by_action", ["action"]),
+
   founder_inbox: defineTable({
     kind: vInboxKind,
     ref: v.string(),
