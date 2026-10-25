@@ -8,6 +8,7 @@ import {
   formatDecision,
   formatDigest,
   formatHandoffAssign,
+  formatNudge,
   formatRepair,
   parseEnvelope,
   type AssignArgs,
@@ -220,6 +221,12 @@ describe("Dispatcher formatters", () => {
       attempt: 2,
       repair: 'Field "kind" is required for ISSUE.',
     });
+  });
+
+  test("formatNudge is a full ASSIGN with attempt and nudge", () => {
+    const text = formatNudge({ ...assign, attempt: 2, note: "No reply arrived before the deadline." });
+    expect(text.startsWith("[Dispatcher] @Support Reminder on task t_812 (attempt 2): No reply arrived")).toBe(true);
+    expect(blockOf(text)).toMatchObject({ type: "ASSIGN", task: "t_812", to: "support", attempt: 2, nudge: "No reply arrived before the deadline." });
   });
 
   test("formatHandoffAssign quotes the source and refs its thread", () => {

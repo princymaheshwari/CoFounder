@@ -19,10 +19,13 @@ import type * as dev from "../dev.js";
 import type * as dispatcher from "../dispatcher.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as issues from "../issues.js";
 import type * as lib_envelope from "../lib/envelope.js";
+import type * as lib_routing from "../lib/routing.js";
 import type * as lib_tokens from "../lib/tokens.js";
 import type * as lib_types from "../lib/types.js";
 import type * as seed from "../seed.js";
+import type * as tasks from "../tasks.js";
 
 import type {
   ApiFromModules,
@@ -42,10 +45,13 @@ declare const fullApi: ApiFromModules<{
   dispatcher: typeof dispatcher;
   health: typeof health;
   http: typeof http;
+  issues: typeof issues;
   "lib/envelope": typeof lib_envelope;
+  "lib/routing": typeof lib_routing;
   "lib/tokens": typeof lib_tokens;
   "lib/types": typeof lib_types;
   seed: typeof seed;
+  tasks: typeof tasks;
 }>;
 
 /**

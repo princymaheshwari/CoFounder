@@ -302,6 +302,14 @@ export function formatRepair(a: AssignArgs & { attempt: number; error: string })
   );
 }
 
+// A nudge is a full ASSIGN re-sent once when no reply arrived before the task's deadline (spec 05).
+export function formatNudge(a: AssignArgs & { attempt: number; note: string }): string {
+  return (
+    `[Dispatcher] @${a.mention} Reminder on task ${a.taskId} (attempt ${a.attempt}): ${oneLine(a.note)}\n\n` +
+    fenced(assignBlock(a, { attempt: a.attempt, nudge: a.note }))
+  );
+}
+
 export function formatHandoffAssign(
   a: AssignArgs & { fromName: string; sourceRef: string; sourceSummary: string },
 ): string {

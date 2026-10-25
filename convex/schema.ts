@@ -109,6 +109,7 @@ export default defineSchema({
     origin_refs: v.array(v.string()),
     token_hash: v.optional(v.string()),
     deadline: v.number(),
+    nudged: v.optional(v.boolean()), // the one deadline nudge was sent (spec 05)
     mode: vTaskMode,
     created_at: v.number(),
     updated_at: v.number(),
@@ -122,6 +123,7 @@ export default defineSchema({
     task: v.id("tasks"),
     chain_id: v.string(),
     raised_by_role: vRole,
+    to_role: v.optional(vRole), // who acts next; absent = the founder (spec 05)
     level: vIssueLevel,
     kind: vIssueKind,
     summary: v.string(),

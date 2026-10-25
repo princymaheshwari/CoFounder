@@ -7,9 +7,18 @@ import { env, internalAction, internalMutation, internalQuery, type MutationCtx 
 import { appendMessage, audit, getConfig } from "./channels";
 import { RateLimitedError } from "./creao/http";
 import { getRun, isTerminal, replyText, startRun, webhookUrl } from "./creao/runs";
-import { companyBlock, formatAssign, formatRepair, parseEnvelope, type AssignArgs } from "./lib/envelope";
+import {
+  companyBlock,
+  formatAssign,
+  formatHandoffAssign,
+  formatNudge,
+  formatRepair,
+  parseEnvelope,
+  type AssignArgs,
+} from "./lib/envelope";
 import { TOKEN_TTL_MS, hashToken, signTaskToken } from "./lib/tokens";
 import { vRunPurpose, vRunStatus, type Department, type RunPurpose, type RunStatus } from "./lib/types";
+import { onAgentReply, onRunFailed } from "./tasks";
 
 // Dispatcher (spec 04): starts agent runs through the Creao API Trigger and records each task's
 // conversation as a channel thread. Only startRunForTask starts role-agent runs (invariant 3).
@@ -35,7 +44,7 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 // The real token is substituted only into the run input; channel messages keep this placeholder.
 export const TOKEN_PLACEHOLDER = "[task-token]";
 const STALE_RUN_MS = 3 * 60 * 1000;
-const DEFAULT_LEVEL_TIMEOUT_MS = 5 * 60 * 1000;
+export const DEFAULT_LEVEL_TIMEOUT_MS = 5 * 60 * 1000;
 
 type StartArgs = { taskId: Id<"tasks">; messageId: Id<"messages">; purpose: RunPurpose; attempt: number };
 
@@ -86,8 +95,15 @@ async function enqueueStart(ctx: MutationCtx, room: Id<"rooms">, args: StartArgs
   await pools[channel?.department ?? "none"].enqueueAction(ctx, internal.dispatcher.startRunForTask, args);
 }
 
+export type HandoffSource = { fromName: string; sourceRef: string; sourceSummary: string };
+
 // Opens the task's thread with an ASSIGN and queues the agent run on the department Workpool.
-export async function assign(ctx: MutationCtx, taskId: Id<"tasks">): Promise<Id<"messages">> {
+// A handoff's first ASSIGN quotes the source thread (spec 05); repairs and nudges reuse the plain brief.
+export async function assign(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+  opts: { handoff?: HandoffSource } = {},
+): Promise<Id<"messages">> {
   const task = await ctx.db.get(taskId);
   if (!task) throw new Error(`task ${taskId} not found`);
   if (task.status !== "queued") throw new Error(`task ${taskId} is ${task.status}, not queued`);
@@ -103,7 +119,7 @@ export async function assign(ctx: MutationCtx, taskId: Id<"tasks">): Promise<Id<
     task: taskId,
     sender_kind: "system",
     sender_name: "Dispatcher",
-    text: formatAssign(args),
+    text: opts.handoff ? formatHandoffAssign({ ...args, ...opts.handoff }) : formatAssign(args),
   });
   await enqueueStart(ctx, room, { taskId, messageId, purpose: "assign", attempt: task.attempt });
   await audit(ctx, { actor: "dispatcher", kind: "assign", ref: taskId, detail: { messageId, role: task.role } });
@@ -116,27 +132,36 @@ export const assignTask = internalMutation({
   handler: (ctx, { taskId }) => assign(ctx, taskId),
 });
 
-// A repair is a new run for the same agent on the task's Creao thread (spec 05 decides when).
+// Repairs and nudges are new runs for the same agent on the task's Creao thread (spec 05 decides when).
+// The deadline restarts here, so checkStuckTasks never acts again before the new run has had its time.
+export async function rerun(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+  purpose: "repair" | "nudge",
+  note: string,
+): Promise<Id<"messages">> {
+  const task = await ctx.db.get(taskId);
+  if (!task) throw new Error(`task ${taskId} not found`);
+  const attempt = task.attempt + 1;
+  const { args, room } = await assignArgs(ctx, taskId);
+  const messageId = await appendMessage(ctx, {
+    room,
+    task: taskId,
+    sender_kind: "system",
+    sender_name: "Dispatcher",
+    text: purpose === "repair" ? formatRepair({ ...args, attempt, error: note }) : formatNudge({ ...args, attempt, note }),
+  });
+  const timeout = await getConfig(ctx, "level_timeout_ms", DEFAULT_LEVEL_TIMEOUT_MS);
+  await ctx.db.patch(taskId, { attempt, deadline: Date.now() + timeout, updated_at: Date.now() });
+  await enqueueStart(ctx, room, { taskId, messageId, purpose, attempt });
+  await audit(ctx, { actor: "dispatcher", kind: purpose, ref: taskId, detail: { messageId, attempt, note } });
+  return messageId;
+}
+
 export const sendRepair = internalMutation({
   args: { taskId: v.id("tasks"), error: v.string() },
   returns: v.id("messages"),
-  handler: async (ctx, { taskId, error }) => {
-    const task = await ctx.db.get(taskId);
-    if (!task) throw new Error(`task ${taskId} not found`);
-    const attempt = task.attempt + 1;
-    const { args, room } = await assignArgs(ctx, taskId);
-    const messageId = await appendMessage(ctx, {
-      room,
-      task: taskId,
-      sender_kind: "system",
-      sender_name: "Dispatcher",
-      text: formatRepair({ ...args, attempt, error }),
-    });
-    await ctx.db.patch(taskId, { attempt, updated_at: Date.now() });
-    await enqueueStart(ctx, room, { taskId, messageId, purpose: "repair", attempt });
-    await audit(ctx, { actor: "dispatcher", kind: "repair", ref: taskId, detail: { messageId, attempt, error } });
-    return messageId;
-  },
+  handler: (ctx, { taskId, error }) => rerun(ctx, taskId, "repair", error),
 });
 
 export const runInput = internalQuery({
@@ -333,7 +358,8 @@ export const recordReply = internalMutation({
         creao_run_id: a.runId,
       });
       await audit(ctx, { actor: "dispatcher", kind: "run_failed", ref: task._id, detail: { runId: a.runId, status: a.status, errorCode: a.errorCode } });
-      return null; // spec 05: failed-run path
+      await onRunFailed(ctx, task._id, a.runId, a.status, a.errorCode);
+      return null;
     }
 
     const agent = await ctx.db
@@ -361,7 +387,7 @@ export const recordReply = internalMutation({
       ref: task._id,
       detail: { runId: a.runId, messageId, valid: parsed.ok, ...(parsed.ok ? { type: parsed.env.type } : { error: parsed.error }) },
     });
-    // Spec 05 hooks in here: onAgentReply(task, message) routes the envelope.
+    await onAgentReply(ctx, task._id, messageId, parsed);
     return null;
   },
 });
