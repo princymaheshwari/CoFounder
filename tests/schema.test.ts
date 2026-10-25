@@ -40,7 +40,7 @@ describe("seed:config", () => {
   test("creates 5 channels, 11 agents and the config thresholds", async () => {
     const t = convexTest(schema, modules);
     const counts = await t.mutation(internal.seed.config, {});
-    expect(counts).toEqual({ rooms: 5, agents: 11, config: 6 });
+    expect(counts).toEqual({ rooms: 5, agents: 11, config: 6, company: true });
 
     const config = await t.run((ctx) => ctx.db.query("config").collect());
     expect(Object.fromEntries(config.map((c) => [c.key, c.value]))).toEqual(CONFIG_DEFAULTS);
@@ -71,7 +71,7 @@ describe("seed:config", () => {
     });
 
     const counts = await t.mutation(internal.seed.config, {});
-    expect(counts).toEqual({ rooms: 5, agents: 11, config: 6 });
+    expect(counts).toEqual({ rooms: 5, agents: 11, config: 6, company: true });
 
     const { seq, timeout } = await t.run(async (ctx) => ({
       seq: (await ctx.db

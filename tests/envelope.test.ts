@@ -102,6 +102,8 @@ describe("parseEnvelope rejects", () => {
     ["HANDOFF without brief", wrap({ ...base, type: "HANDOFF", to_role: "ledger" }), /Field "brief" is required for HANDOFF/],
     ["ISSUE without kind", wrap({ ...base, type: "ISSUE", attempts: ["a"] }), /Field "kind" is required for ISSUE/],
     ["ISSUE without attempts", wrap({ ...base, type: "ISSUE", kind: "information", attempts: [] }), /Field "attempts" needs at least one/],
+    // Seen live 2026-10-25: Support sent attempts as a string.
+    ["attempts as a string", wrap({ ...base, type: "ISSUE", kind: "information", attempts: "ran co" }), /^Field "attempts" must be an array\.$/],
     ["ESCALATE without need", wrap({ ...base, type: "ESCALATE", attempts: ["a"] }), /Field "need" is required for ESCALATE/],
     ["OBJECT without findings", wrap({ ...base, type: "OBJECT", refs: ["#x/1"] }), /Field "findings" needs at least one/],
     ["OBJECT without refs", wrap({ ...base, type: "OBJECT", findings: [{ claim: "c", evidence: "e" }] }), /Field "refs" must reference/],

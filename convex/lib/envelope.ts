@@ -113,8 +113,10 @@ function describeIssue(issue: z.core.$ZodIssue, root: unknown): string {
         : issue.origin === "string"
           ? `${name} must not be empty.`
           : `${name} must be at least ${String(issue.minimum)}.`;
-    case "invalid_type":
-      return `${name} must be ${issue.expected === "int" ? "an integer" : `a ${issue.expected}`}.`;
+    case "invalid_type": {
+      const expected = issue.expected === "int" ? "integer" : issue.expected;
+      return `${name} must be ${/^[aeiou]/.test(expected) ? "an" : "a"} ${expected}.`;
+    }
     default:
       return `${name} is invalid.`;
   }

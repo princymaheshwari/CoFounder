@@ -1,0 +1,389 @@
+import { HOUR, RateLimiter } from "@convex-dev/rate-limiter";
+import { Workpool } from "@convex-dev/workpool";
+import { v } from "convex/values";
+import { components, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { env, internalAction, internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
+import { appendMessage, audit, getConfig } from "./channels";
+import { RateLimitedError } from "./creao/http";
+import { getRun, isTerminal, replyText, startRun, webhookUrl } from "./creao/runs";
+import { companyBlock, formatAssign, formatRepair, parseEnvelope, type AssignArgs } from "./lib/envelope";
+import { TOKEN_TTL_MS, hashToken, signTaskToken } from "./lib/tokens";
+import { vRunPurpose, vRunStatus, type Department, type RunPurpose, type RunStatus } from "./lib/types";
+
+// Dispatcher (spec 04): starts agent runs through the Creao API Trigger and records each task's
+// conversation as a channel thread. Only startRunForTask starts role-agent runs (invariant 3).
+
+const POOL_OPTIONS = {
+  maxParallelism: 3,
+  retryActionsByDefault: true,
+  defaultRetryBehavior: { maxAttempts: 3, initialBackoffMs: 2_000, base: 2 },
+};
+const pools: Record<Department, Workpool> = {
+  marketing: new Workpool(components.marketingPool, POOL_OPTIONS),
+  customer: new Workpool(components.customerPool, POOL_OPTIONS),
+  finance: new Workpool(components.financePool, POOL_OPTIONS),
+  leadership: new Workpool(components.leadershipPool, POOL_OPTIONS),
+  none: new Workpool(components.leadershipPool, POOL_OPTIONS),
+};
+
+// Cost guard: every run spends Creao credits.
+export const rateLimiter = new RateLimiter(components.rateLimiter, {
+  agentRuns: { kind: "fixed window", rate: 60, period: HOUR },
+});
+
+// The real token is substituted only into the run input; channel messages keep this placeholder.
+export const TOKEN_PLACEHOLDER = "[task-token]";
+const STALE_RUN_MS = 3 * 60 * 1000;
+const DEFAULT_LEVEL_TIMEOUT_MS = 5 * 60 * 1000;
+
+type StartArgs = { taskId: Id<"tasks">; messageId: Id<"messages">; purpose: RunPurpose; attempt: number };
+
+async function assignArgs(ctx: MutationCtx, taskId: Id<"tasks">): Promise<{ args: AssignArgs; room: Id<"rooms"> }> {
+  const task = await ctx.db.get(taskId);
+  if (!task) throw new Error(`task ${taskId} not found`);
+  const agent = await ctx.db
+    .query("agents")
+    .withIndex("by_role", (q) => q.eq("role", task.role))
+    .unique();
+  if (!agent || !agent.enabled || agent.kind !== "role" || !agent.creao_app_id) {
+    throw new Error(`no enabled role agent with an App ID for role ${task.role}`);
+  }
+  const company = await ctx.db.query("company").first();
+  if (!company) throw new Error("company profile not seeded (npx convex run seed:config)");
+
+  // Active rules in scope for this role (spec 12 refines the selection by likely action types).
+  const rules = (await ctx.db.query("rules").take(500)).filter(
+    (r) =>
+      r.status === "active" &&
+      (r.scope.level === "company" ||
+        (r.scope.level === "department" && r.scope.department === agent.department) ||
+        (r.scope.level === "role" && r.scope.role === task.role)),
+  );
+  // Data hints travel with the event that created the task (spec 05 sets them).
+  const event = task.event ? await ctx.db.get(task.event) : null;
+  const hints: unknown = event?.payload && typeof event.payload === "object" ? (event.payload as { data_hints?: unknown }).data_hints : undefined;
+  const dataHints = Array.isArray(hints) ? hints.filter((h): h is string => typeof h === "string") : [];
+
+  return {
+    room: task.room,
+    args: {
+      mention: agent.display_name,
+      taskId: task._id,
+      role: task.role,
+      brief: task.brief,
+      token: TOKEN_PLACEHOLDER,
+      company: companyBlock(company),
+      rules: rules.map((r) => r.text),
+      dataHints,
+      refs: task.origin_refs,
+    },
+  };
+}
+
+async function enqueueStart(ctx: MutationCtx, room: Id<"rooms">, args: StartArgs): Promise<void> {
+  const channel = await ctx.db.get(room);
+  await pools[channel?.department ?? "none"].enqueueAction(ctx, internal.dispatcher.startRunForTask, args);
+}
+
+// Opens the task's thread with an ASSIGN and queues the agent run on the department Workpool.
+export async function assign(ctx: MutationCtx, taskId: Id<"tasks">): Promise<Id<"messages">> {
+  const task = await ctx.db.get(taskId);
+  if (!task) throw new Error(`task ${taskId} not found`);
+  if (task.status !== "queued") throw new Error(`task ${taskId} is ${task.status}, not queued`);
+  // Status stays queued until the run starts, so an existing thread means it was already assigned.
+  const opened = await ctx.db
+    .query("messages")
+    .withIndex("by_task", (q) => q.eq("task", taskId))
+    .first();
+  if (opened) throw new Error(`task ${taskId} is already assigned (thread open)`);
+  const { args, room } = await assignArgs(ctx, taskId);
+  const messageId = await appendMessage(ctx, {
+    room,
+    task: taskId,
+    sender_kind: "system",
+    sender_name: "Dispatcher",
+    text: formatAssign(args),
+  });
+  await enqueueStart(ctx, room, { taskId, messageId, purpose: "assign", attempt: task.attempt });
+  await audit(ctx, { actor: "dispatcher", kind: "assign", ref: taskId, detail: { messageId, role: task.role } });
+  return messageId;
+}
+
+export const assignTask = internalMutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.id("messages"),
+  handler: (ctx, { taskId }) => assign(ctx, taskId),
+});
+
+// A repair is a new run for the same agent on the task's Creao thread (spec 05 decides when).
+export const sendRepair = internalMutation({
+  args: { taskId: v.id("tasks"), error: v.string() },
+  returns: v.id("messages"),
+  handler: async (ctx, { taskId, error }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new Error(`task ${taskId} not found`);
+    const attempt = task.attempt + 1;
+    const { args, room } = await assignArgs(ctx, taskId);
+    const messageId = await appendMessage(ctx, {
+      room,
+      task: taskId,
+      sender_kind: "system",
+      sender_name: "Dispatcher",
+      text: formatRepair({ ...args, attempt, error }),
+    });
+    await ctx.db.patch(taskId, { attempt, updated_at: Date.now() });
+    await enqueueStart(ctx, room, { taskId, messageId, purpose: "repair", attempt });
+    await audit(ctx, { actor: "dispatcher", kind: "repair", ref: taskId, detail: { messageId, attempt, error } });
+    return messageId;
+  },
+});
+
+export const runInput = internalQuery({
+  args: { taskId: v.id("tasks"), messageId: v.id("messages") },
+  returns: v.object({
+    appId: v.string(),
+    inputField: v.string(),
+    text: v.string(),
+    role: v.string(),
+    threadId: v.optional(v.string()),
+    createdAt: v.number(),
+    department: v.string(),
+  }),
+  handler: async (ctx, { taskId, messageId }) => {
+    const task = await ctx.db.get(taskId);
+    const message = await ctx.db.get(messageId);
+    if (!task || !message) throw new Error("task or message not found");
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_role", (q) => q.eq("role", task.role))
+      .unique();
+    if (!agent?.creao_app_id) throw new Error(`no App ID for role ${task.role}`);
+    const room = await ctx.db.get(task.room);
+    return {
+      appId: agent.creao_app_id,
+      inputField: agent.input_field,
+      text: message.text,
+      role: task.role,
+      threadId: task.creao_thread_id,
+      createdAt: task.created_at,
+      department: room?.department ?? "none",
+    };
+  },
+});
+
+export const consumeRunBudget = internalMutation({
+  args: { role: v.string() },
+  returns: v.object({ ok: v.boolean(), retryAfter: v.optional(v.number()) }),
+  handler: async (ctx, { role }) => {
+    const status = await rateLimiter.limit(ctx, "agentRuns", { key: role });
+    return status.ok ? { ok: true } : { ok: false, retryAfter: status.retryAfter };
+  },
+});
+
+export const startRunForTask = internalAction({
+  args: { taskId: v.id("tasks"), messageId: v.id("messages"), purpose: vRunPurpose, attempt: v.number() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const input = await ctx.runQuery(internal.dispatcher.runInput, { taskId: args.taskId, messageId: args.messageId });
+    const pool = pools[input.department as Department] ?? pools.none;
+
+    const budget = await ctx.runMutation(internal.dispatcher.consumeRunBudget, { role: input.role });
+    if (!budget.ok) {
+      await pool.enqueueAction(ctx, internal.dispatcher.startRunForTask, args, { runAfter: budget.retryAfter ?? HOUR });
+      return null;
+    }
+
+    const secret = env.CO_TOKEN_SECRET;
+    if (!secret) throw new Error("CO_TOKEN_SECRET is not set");
+    const token = await signTaskToken(secret, {
+      task: args.taskId,
+      role: input.role,
+      exp: input.createdAt + TOKEN_TTL_MS,
+    });
+    const idempotencyKey = `${args.taskId}:${args.purpose}:${args.attempt}`;
+
+    let runId: string;
+    try {
+      ({ runId } = await startRun({
+        appId: input.appId,
+        inputs: { [input.inputField]: input.text.split(TOKEN_PLACEHOLDER).join(token) },
+        webhookUrl: webhookUrl(),
+        idempotencyKey,
+        threadId: input.threadId,
+      }));
+    } catch (err) {
+      if (err instanceof RateLimitedError) {
+        await pool.enqueueAction(ctx, internal.dispatcher.startRunForTask, args, { runAfter: err.retryAfterMs });
+        return null;
+      }
+      throw err; // Workpool retries; the idempotencyKey makes a retried start return the same run
+    }
+
+    await ctx.runMutation(internal.dispatcher.markRunStarted, {
+      ...args,
+      runId,
+      idempotencyKey,
+      tokenHash: await hashToken(token),
+    });
+    return null;
+  },
+});
+
+export const markRunStarted = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    messageId: v.id("messages"),
+    purpose: vRunPurpose,
+    attempt: v.number(),
+    runId: v.string(),
+    idempotencyKey: v.string(),
+    tokenHash: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, a) => {
+    const task = await ctx.db.get(a.taskId);
+    if (!task) throw new Error(`task ${a.taskId} not found`);
+    const existing = await ctx.db
+      .query("runs")
+      .withIndex("by_creao_run_id", (q) => q.eq("creao_run_id", a.runId))
+      .unique();
+    if (!existing) {
+      await ctx.db.insert("runs", {
+        purpose: a.purpose,
+        role: task.role,
+        task: a.taskId,
+        creao_run_id: a.runId,
+        idempotency_key: a.idempotencyKey,
+        status: "pending",
+        delivery_ids: [],
+        started_at: Date.now(),
+      });
+    }
+    const timeout = await getConfig(ctx, "level_timeout_ms", DEFAULT_LEVEL_TIMEOUT_MS);
+    await ctx.db.patch(a.taskId, {
+      creao_run_id: a.runId,
+      token_hash: a.tokenHash,
+      ...(task.status === "queued" ? { status: "assigned" as const } : {}),
+      deadline: Date.now() + timeout,
+      updated_at: Date.now(),
+    });
+    await ctx.db.patch(a.messageId, { creao_run_id: a.runId });
+    await audit(ctx, { actor: "dispatcher", kind: "run_started", ref: a.taskId, detail: { runId: a.runId, purpose: a.purpose } });
+    return null;
+  },
+});
+
+// Re-fetches the run (webhooks are unsigned; trust only this) and records a terminal result.
+export const ingestRun = internalAction({
+  args: { runId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { runId }) => {
+    const run = await getRun(runId);
+    if (!isTerminal(run.status)) return null; // pollRuns tries again later
+    await ctx.runMutation(internal.dispatcher.recordReply, {
+      runId,
+      status: run.status,
+      text: replyText(run),
+      threadId: run.threadId,
+      errorCode: run.errorCode,
+    });
+    return null;
+  },
+});
+
+const TERMINAL: readonly RunStatus[] = ["completed", "failed", "cancelled"];
+
+export const recordReply = internalMutation({
+  args: {
+    runId: v.string(),
+    status: vRunStatus,
+    text: v.string(),
+    threadId: v.optional(v.string()),
+    errorCode: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, a) => {
+    const run = await ctx.db
+      .query("runs")
+      .withIndex("by_creao_run_id", (q) => q.eq("creao_run_id", a.runId))
+      .unique();
+    if (!run) {
+      await audit(ctx, { actor: "dispatcher", kind: "unknown_run", ref: a.runId });
+      return null;
+    }
+    if (TERMINAL.includes(run.status)) return null; // already recorded (duplicate webhook or poll)
+    await ctx.db.patch(run._id, { status: a.status, finished_at: Date.now(), error_code: a.errorCode });
+
+    // Executor results are handled by spec 10 (onExecutorResult).
+    if (run.purpose === "execute" || !run.task) {
+      await audit(ctx, { actor: "dispatcher", kind: "run_finished", ref: a.runId, detail: { status: a.status } });
+      return null;
+    }
+    const task = await ctx.db.get(run.task);
+    if (!task) return null;
+
+    if (a.status !== "completed") {
+      await appendMessage(ctx, {
+        room: task.room,
+        task: task._id,
+        sender_kind: "system",
+        sender_name: "Dispatcher",
+        text: `[Dispatcher] Run for task ${task._id} ended as ${a.status}${a.errorCode ? ` (${a.errorCode})` : ""}.`,
+        creao_run_id: a.runId,
+      });
+      await audit(ctx, { actor: "dispatcher", kind: "run_failed", ref: task._id, detail: { runId: a.runId, status: a.status, errorCode: a.errorCode } });
+      return null; // spec 05: failed-run path
+    }
+
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_role", (q) => q.eq("role", task.role))
+      .unique();
+    const parsed = parseEnvelope(a.text, { taskId: task._id, role: task.role, kind: task.kind });
+    const messageId = await appendMessage(ctx, {
+      room: task.room,
+      task: task._id,
+      sender_kind: "agent",
+      sender_name: agent?.display_name ?? task.role,
+      sender_role: task.role,
+      text: a.text,
+      creao_run_id: a.runId,
+      ...(parsed.ok ? { envelope: parsed.env } : { envelope_error: parsed.error }),
+    });
+    await ctx.db.patch(task._id, {
+      ...(a.threadId ? { creao_thread_id: a.threadId } : {}),
+      updated_at: Date.now(),
+    });
+    await audit(ctx, {
+      actor: task.role,
+      kind: "agent_reply",
+      ref: task._id,
+      detail: { runId: a.runId, messageId, valid: parsed.ok, ...(parsed.ok ? { type: parsed.env.type } : { error: parsed.error }) },
+    });
+    // Spec 05 hooks in here: onAgentReply(task, message) routes the envelope.
+    return null;
+  },
+});
+
+// Completes runs whose webhook never arrived (fails before start, restarts, lost deliveries).
+export const pollRuns = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - STALE_RUN_MS;
+    let scheduled = 0;
+    for (const status of ["pending", "running"] as const) {
+      const runs = await ctx.db
+        .query("runs")
+        .withIndex("by_status", (q) => q.eq("status", status))
+        .take(100);
+      for (const run of runs) {
+        if (run.started_at > cutoff) continue;
+        await ctx.scheduler.runAfter(0, internal.dispatcher.ingestRun, { runId: run.creao_run_id });
+        scheduled++;
+      }
+    }
+    return scheduled;
+  },
+});

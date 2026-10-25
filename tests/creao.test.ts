@@ -170,13 +170,12 @@ describe("/creao-callback", () => {
     expect((await deliver(t, "/creao-callback?token=nope")).status).toBe(401);
   });
 
-  test("records a real delivery once and ignores the duplicate", async () => {
+  test("accepts a delivery for a run we did not start and only audits it", async () => {
     const t = convexTest(schema, modules);
-    expect((await deliver(t)).status).toBe(200);
     expect((await deliver(t)).status).toBe(200);
     const rows = await t.run((ctx) => ctx.db.query("audit_log").collect());
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ kind: "creao_webhook", detail: { runId: webhook.body.runId } });
+    expect(rows[0]).toMatchObject({ kind: "webhook_unknown_run", ref: webhook.body.runId });
   });
 
   test("rejects a body without runId", async () => {

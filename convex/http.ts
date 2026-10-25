@@ -22,9 +22,11 @@ http.route({
     const runId =
       body && typeof body === "object" && "runId" in body && typeof body.runId === "string" ? body.runId : null;
     if (!runId) return new Response("missing runId", { status: 400 });
+    const status = body && typeof body === "object" && "status" in body && typeof body.status === "string" ? body.status : undefined;
     // Fall back to the run id when the delivery header is absent so retries still dedupe.
     const deliveryId = req.headers.get("X-Creao-Delivery-Id") ?? `run:${runId}`;
-    await ctx.runMutation(internal.creao.callback.recordDelivery, { deliveryId, runId, body });
+    // Records the delivery and schedules ingestRun; return 200 well inside Creao's 10 s timeout.
+    await ctx.runMutation(internal.creao.callback.recordDelivery, { deliveryId, runId, status });
     return new Response(null, { status: 200 });
   }),
 });

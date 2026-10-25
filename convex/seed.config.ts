@@ -2,6 +2,22 @@
 // creao_app_id: the App ID on each agent's page (tracker: agents/setup/README.md).
 // input_field: the agent's Input Form field id (Advanced → Configuration → Input Form).
 
+// Demo company profile (fictional). Agents are company-agnostic: this reaches them only as the
+// ASSIGN company block and via `co data company`. The founder app Setup page edits it (spec 14).
+export const COMPANY = {
+  name: "Lumen Notes",
+  product: "AI meeting notes",
+  description: "Records meetings and turns them into searchable notes, action items and summaries.",
+  plans: [{ name: "Pro", price_cents: 3500, period: "month" }],
+  customer_type: "small teams and solo professionals",
+  voice: "warm, concise",
+  policies: ["refunds within 30 days for billing errors"],
+  competitors: [], // real public URLs are allowed here for Apify monitors (spec 13)
+  vendors: [{ name: "ModelAPI Co" }, { name: "CloudHost" }, { name: "MailTool" }],
+  review_urls: [],
+  communities: [],
+};
+
 // Convex-only channels, rendered in the founder app Feed. Not Creao rooms.
 export const ROOMS = [
   { name: "#marketing", department: "marketing" },

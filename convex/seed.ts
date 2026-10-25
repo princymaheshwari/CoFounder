@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
-import { AGENTS, ROOMS } from "./seed.config";
+import { AGENTS, COMPANY, ROOMS } from "./seed.config";
 
 // Gate and ladder thresholds (spec 01). Missing keys are inserted; existing values are left as tuned.
 export const CONFIG_DEFAULTS = {
@@ -12,11 +12,16 @@ export const CONFIG_DEFAULTS = {
   level_timeout_ms: 5 * 60 * 1000, // demo: 5 min per ladder level
 } as const;
 
-// Upserts channels and agents from seed.config.ts and seeds config. Idempotent.
+// Upserts channels and agents from seed.config.ts, seeds config and the demo company profile. Idempotent.
 export const config = internalMutation({
   args: {},
-  returns: v.object({ rooms: v.number(), agents: v.number(), config: v.number() }),
+  returns: v.object({ rooms: v.number(), agents: v.number(), config: v.number(), company: v.boolean() }),
   handler: async (ctx) => {
+    // Inserted only when missing, so founder edits from the Setup page survive reseeding.
+    if (!(await ctx.db.query("company").first())) {
+      await ctx.db.insert("company", { ...COMPANY, updated_at: Date.now() });
+    }
+
     for (const room of ROOMS) {
       const existing = await ctx.db
         .query("rooms")
@@ -73,6 +78,7 @@ export const config = internalMutation({
       rooms: (await ctx.db.query("rooms").collect()).length,
       agents: (await ctx.db.query("agents").collect()).length,
       config: (await ctx.db.query("config").collect()).length,
+      company: (await ctx.db.query("company").first()) !== null,
     };
   },
 });
