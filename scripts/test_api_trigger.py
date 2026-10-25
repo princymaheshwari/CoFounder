@@ -1,4 +1,4 @@
-"""Test Creao's API Trigger (plan B transport) with your capi_ account key.
+"""Test Creao's API Trigger (the only Creao transport; see docs/specs/02-creao-clients.md) with your capi_ account key.
 
 Usage (PowerShell):
     $env:CREAO_API_KEY = "capi_..."      # agent.creao.ai -> Settings -> API Keys

@@ -70,11 +70,15 @@ cofounder/
     apify.ts               ingest + callback
     http.ts                /creao-callback, /apify-callback, /co/*
     crons.ts
-    seed.ts
+    health.ts              ping, health:check (API Trigger), health:gateway
+    seed.ts                seed:config (agents + channels from seed.config.ts)
+    seed.config.ts         Creao App IDs + input field ids (filled by hand)
+    seedData.ts            deterministic Nessie seed data (spec 08)
+    replay.ts              startReplay, stepDay, replay:reset (spec 16)
   src/                     founder app (React)
   skills/co/               SKILL.md + co.py
   actors/company-radar/    Apify Actor (stretch)
-  scripts/                 seed-nessie.ts, replay.ts
+  scripts/                 set-env.sh, test_api_trigger.py, inject-signal.ts (spec 13), replay/scenario.json (spec 16)
   tests/                   vitest + convex-test
 ```
 
@@ -84,7 +88,8 @@ cofounder/
 npm install
 npx convex dev            # run backend, push schema/functions on save
 npm run dev               # frontend
-npx convex run seed:all   # seed agents/rooms/rules rows after env vars are set
+npx convex run seed:config   # seed agents + channels (rooms) rows from convex/seed.config.ts
+npx convex run health:check  # confirm CREAO_API_KEY reaches the API Trigger
 npm test                  # vitest (convex-test for functions)
 npx convex env set NAME value   # set a backend secret
 ```
@@ -164,3 +169,37 @@ Agents are **company-agnostic**: no company name in any agent prompt. The compan
 - Creao Rooms API / CREAO CLI `/v1/*` (unavailable; see External APIs).
 - Real social posting (post queue is mock).
 - Auth beyond a single founder login.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
+
+Project notes:
+- Start every session (and every spec) with `graphify query` / `graphify explain` instead of re-reading `docs/system-design.md` and the specs in full. Open a spec file only for the exact section the graph points to.
+- The graph covers `docs/`, `agents/` and this file even though `docs/` is git-ignored: `graphify-out/.graphify_build.json` sets `gitignore: false` with explicit excludes (node_modules, convex/_generated, .claude, .convex, tsconfigs, and the superseded `docs/specs/04-dispatcher-and-room-reader.md`; the live spec 04 is `04-dispatcher-and-runs.md`). Keep that config when rebuilding.
+- `graphify update .` only refreshes code. After editing any doc, spec or agent file, run `/graphify --update` so the semantic (doc) nodes are re-extracted.
+- `graphify-out/` is git-ignored (it summarizes the private docs).
+- `docs/` is the source of truth for the plan. When it changes, update stale text elsewhere (`agents/`, this file, code comments) to match.
+
+## Convex
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->

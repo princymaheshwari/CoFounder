@@ -1,6 +1,6 @@
 # Creao setup — order and tracker
 
-Everything runs on the **founder** account. The Dispatcher is Convex code that starts each agent's runs through Creao's API Trigger with your `capi_` account key; every ASSIGN starts with `[Dispatcher]`. Agents you already created need no prompt changes: they still receive an ASSIGN, just as run input instead of a room post. Each file is a paste-ready chat script: Step 1 manual → Step 2 practice task → Step 3 Create Agent → Step 4 settings.
+Everything runs on the **founder** account. The Dispatcher is Convex code that starts each agent's runs through Creao's API Trigger with your `capi_` account key; every ASSIGN starts with `[Dispatcher]`. Agents you already created need no prompt changes: they still receive an ASSIGN, just as run input instead of a room post. (The manuals were later reworded for channels and for repairs arriving as an ASSIGN with `repair`/`attempt`; re-pasting them into existing agents is optional.) Executors: one per connector with the same prompt (`11-executor.md`); `schedule_digest` stays in-app. Each file is a paste-ready chat script: Step 1 manual → Step 2 practice task → Step 3 Create Agent → Step 4 settings.
 
 Build order (flow A first): 01 Support → 02 Ledger → 03 Customer Manager → 04 Finance Manager → 05 Cofounder → 11 Executor → then 06–10.
 
