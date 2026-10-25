@@ -95,7 +95,7 @@ const vMessage = v.object({
   senderKind: v.string(),
   sender: v.string(),
   role: v.union(v.string(), v.null()),
-  kind: v.string(), // assign | handoff | repair | nudge | decision | digest | request | note | reply | invalid | posted | radar
+  kind: v.string(), // assign | handoff | repair | nudge | decision | digest | request | note | reply | invalid | posted | radar | nessie
   headline: v.string(),
   to: v.union(v.string(), v.null()),
   rules: v.array(v.string()),
@@ -257,6 +257,8 @@ async function messageVM(ctx: QueryCtx, m: Doc<"messages">, names: Map<string, s
   const posted = /^Posted on (\w+) \(demo post queue[^)]*\): ([\s\S]*)$/.exec(line);
   if (posted) return { ...common, kind: "posted", to: posted[1], headline: posted[2] };
   if (line.startsWith("Company Radar (Apify)")) return { ...common, kind: "radar", headline: tidy(line) };
+  // Money moved (nessie.ts finishExecution): the app offers a live check against Nessie (bank.verifyMessage).
+  if (/^Executed \w+ .*in Nessie \(/.test(line)) return { ...common, kind: "nessie", headline: tidy(line) };
   if (type === "REPAIR" || type === "NUDGE") return { ...common, kind: type.toLowerCase(), headline: tidy(line) };
   if (type === "DECISION") return { ...common, kind: "decision", headline: tidy(txt(env?.note) || line) };
   if (type === "DIGEST") {

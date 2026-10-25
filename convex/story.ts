@@ -357,6 +357,7 @@ export const status = query({
     openRequests: v.number(),
     activeRules: v.number(),
     proposedRules: v.number(),
+    refundBatchRule: v.boolean(), // act 2 ends at the gate only with one active
   }),
   handler: async (ctx) => {
     const acts = (await ctx.db.query("audit_log").withIndex("by_at").order("desc").take(500)).filter((r) => r.kind === "story_act").map((r) => r.ref);
@@ -371,6 +372,7 @@ export const status = query({
       openRequests: open.length,
       activeRules: rules.filter((r) => r.status === "active").length,
       proposedRules: rules.filter((r) => r.status === "proposed").length,
+      refundBatchRule: rules.some((r) => r.status === "active" && r.action_type === "refund_batch"),
     };
   },
 });

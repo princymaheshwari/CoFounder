@@ -1,4 +1,5 @@
 import { clock, humanRule, typeOfRule } from "../lib/format";
+import { NessieLine } from "./Nessie";
 import { Avatar, Mention, REPLY_TYPE, type Message } from "./ui";
 
 // How one message reads. Agents speak in replies; the Dispatcher (code) only assigns, routes and records,
@@ -177,6 +178,7 @@ export function ThreadMessage({ m }: { m: Message }) {
   if (m.kind === "assign" || m.kind === "handoff") return <AssignMessage m={m} />;
   if (m.kind === "posted") return <PostedCard m={m} />;
   if (m.kind === "radar") return <RadarLine m={m} />;
+  if (m.kind === "nessie") return <NessieLine m={m} />;
   return <SystemLine m={m} />;
 }
 

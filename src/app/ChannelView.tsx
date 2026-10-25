@@ -4,6 +4,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { ago, clock, plural } from "../lib/format";
 import { AssignBody, Digest, PostedBadge, RadarLine } from "./Messages";
+import { NessieLine } from "./Nessie";
 import { RequestCard } from "./RequestCard";
 import { Avatar, DeptChip, Pill, ROOM_DEPT, useFresh, useNow, type Entry, type Overview } from "./ui";
 
@@ -107,6 +108,7 @@ function StandaloneEntry({ entry, fresh }: { entry: Entry; fresh: boolean }) {
   if (m.kind === "digest") return <li className={`rounded-lg px-4 ${fresh ? "arrive" : ""}`}><Digest m={m} /></li>;
   if (m.request) return <li className={`py-2 ${fresh ? "arrive" : ""}`}><RequestCard request={m.request} at={m.at} /></li>;
   if (m.kind === "radar") return <li className={`rounded-[14px] px-4 ${fresh ? "arrive" : ""}`}><RadarLine m={m} /></li>;
+  if (m.kind === "nessie") return <li className={`rounded-[14px] px-4 ${fresh ? "arrive" : ""}`}><NessieLine m={m} /></li>;
   return (
     <li className={`flex gap-3 rounded-[14px] px-4 py-2.5 ${fresh ? "arrive" : ""}`}>
       <Avatar name="Dispatcher" kind="system" size={24} />

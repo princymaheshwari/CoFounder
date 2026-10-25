@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { plural } from "../lib/format";
+import { BankPanel } from "./Nessie";
 import { DEPT_GRAD, ROOM_DEPT, type Overview } from "./ui";
 
 export type View = { kind: "desk" } | { kind: "channel"; roomId: Id<"rooms"> } | { kind: "rules" };
@@ -106,6 +107,9 @@ function Story() {
                 </button>
               </div>
               {next ? <p className="mt-1 text-[12px] leading-snug text-muted">{a.cue}</p> : null}
+              {a.act === "double_charge_again" && status && !status.refundBatchRule && status.started.includes("double_charge") ? (
+                <p className="mt-1 text-[12px] font-medium leading-snug text-stop">No refund rule is active yet, so this will come to you. Answer act 1 with “Approve and make it a rule” and approve the rule card first.</p>
+              ) : null}
             </li>
           );
         })}
@@ -187,6 +191,10 @@ export function Sidebar({ overview, view, go }: { overview: Overview; view: View
 
       <div className="px-3">
         <Tape tally={overview.tally} />
+      </div>
+
+      <div className="px-3">
+        <BankPanel />
       </div>
 
       <div className="mt-auto px-3">
