@@ -1,0 +1,3 @@
+#!/bin/sh
+# `co ...` shorthand for `python3 co.py ...` (spec 06).
+exec python3 "$(dirname "$0")/co.py" "$@"

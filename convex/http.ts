@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { env, httpAction } from "./_generated/server";
+import { coData, coHistory, coRadar } from "./co";
 
 const http = httpRouter();
 
@@ -30,5 +31,10 @@ http.route({
     return new Response(null, { status: 200 });
   }),
 });
+
+// co CLI (spec 06): task-token reads for agents.
+http.route({ path: "/co/data", method: "GET", handler: coData });
+http.route({ path: "/co/history", method: "GET", handler: coHistory });
+http.route({ path: "/co/radar", method: "POST", handler: coRadar });
 
 export default http;

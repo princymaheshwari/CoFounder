@@ -258,7 +258,11 @@ export default defineSchema({
     raw: v.any(),
   })
     .index("by_nessie_id", ["nessie_id"])
-    .index("by_kind", ["kind"]),
+    .index("by_kind", ["kind"])
+    // co views (spec 06): account_id is the paying account, counterparty the receiving one.
+    .index("by_account_date", ["account_id", "date"])
+    .index("by_counterparty_date", ["counterparty", "date"])
+    .index("by_date", ["date"]),
 
   // Vector index by_embedding is added in spec 13 once the embedding model (and its dimensions) is verified.
   signals: defineTable({
