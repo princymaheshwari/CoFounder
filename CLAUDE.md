@@ -1,6 +1,6 @@
 # CLAUDE.md — Cofounder
 
-Cofounder lets one founder run a company through a hierarchy of AI agents that talk to each other in Creao rooms, without the founder becoming the approval bottleneck. Agents propose; a deterministic Convex gate decides; only the backend moves money or calls connectors.
+Cofounder lets one founder run a company through a hierarchy of AI agents that talk to each other in typed, threaded department channels, without the founder becoming the approval bottleneck. Agents propose; a deterministic Convex gate decides; only the backend moves money or calls connectors.
 
 Built solo at Cal Hacks 13.0 (deadline: Sunday morning, confirm exact time). Optimize for a working, demoable vertical slice over breadth.
 
@@ -17,13 +17,15 @@ Built solo at Cal Hacks 13.0 (deadline: Sunday morning, confirm exact time). Opt
 5. **Update the spec's checklist** (`- [ ]` → `- [x]`) as acceptance criteria pass, and note any deviation in the spec's "Decisions made while building" section.
 6. When something in a spec conflicts with this file, this file wins; when this file conflicts with reality (an API behaves differently), stop and report it.
 
+**Terminology.** "Room" in code and specs (`rooms` table, `#customer`, …) means a **Convex channel**, rendered in the founder app Feed. It is not a Creao room: Convex never reads or posts to Creao rooms.
+
 ## Non-negotiable invariants
 
 These are the product. Never weaken them, even to make a demo work.
 
 1. **Agents never execute.** Role agents only propose actions inside message envelopes. Only Convex executes: Nessie calls directly, connector writes through the Executor agent.
 2. **The gate is code.** `evaluateGate` is a single Convex mutation: deterministic, transactional, no LLM call inside it. LLMs (Jev, Claude) may produce *inputs* to the gate (labels), never the decision.
-3. **Only the Dispatcher triggers agents.** Agents never @mention other agents. Every agent-triggering post is made by Convex through the Dispatcher account with `trigger_agents: true`. All other posts use `trigger_agents: false`.
+3. **Only the Dispatcher triggers agents.** The Dispatcher is a role in Convex code: it starts agent runs through Creao's **API Trigger** (`POST https://agent.creao.ai/api/v1/runs`), one run per task step, and every ASSIGN it sends starts with `[Dispatcher]`. Only `dispatcher.startRunForTask` (role agents) and `executor.runExecutor` (Executor) call `startRun`. Agents never address each other directly: every message between agents is a Convex record that the Dispatcher delivers as a new run.
 4. **Every agent message is validated.** A message is only acted on after its envelope passes the Convex validator. Invalid → one repair request in the same thread → then an `ISSUE` to the manager.
 5. **Budgets are decremented inside the gate's transaction.** Never check a budget in one function and spend it in another.
 6. **Keys live only in Convex environment variables.** Never in Creao Secrets (account-scoped: every agent sees them), never in the frontend, never in logs.
@@ -36,7 +38,7 @@ These are the product. Never weaken them, even to make a demo work.
 | --- | --- |
 | Backend, DB, orchestration | Convex (TypeScript), components: `@convex-dev/workflow`, `@convex-dev/workpool`, `@convex-dev/rate-limiter`, `@convex-dev/aggregate` |
 | Models | Convex AI Gateway: Claude (rule induction, packages, digests), Jev `typesafe/jev-1.13` (labels), embeddings |
-| Agents | Creao saved agents (Claude Sonnet 5.5 default) working in Creao rooms |
+| Agents | Creao saved agents (Claude Sonnet 5.5 default), run via API Trigger; conversation stored in Convex channels and shown in the founder app Feed |
 | Bank | Capital One Nessie sandbox |
 | Web signals | Apify (Store change-monitor Actors + our Company Radar Actor) |
 | Frontend | React + Vite + Tailwind, Convex React client (reactive queries) |
@@ -55,9 +57,8 @@ cofounder/
   convex/
     schema.ts
     lib/                   pure helpers: envelope.ts, rules.ts, gate.ts, tokens.ts
-    creao/                 rooms.ts (Rooms API client), runs.ts (/v1/runs client)
-    dispatcher.ts          postToRoom, assign, handoff
-    roomReader.ts          polling reader + message ingestion
+    creao/                 http.ts (fetch wrapper), runs.ts (API Trigger client)
+    dispatcher.ts          assignTask, startRunForTask, ingestRun, recordReply, pollRuns
     tasks.ts               task creation, routing, graph limits
     workflows.ts           Workflow definitions
     gate.ts                evaluateGate mutation + action catalog
@@ -65,7 +66,7 @@ cofounder/
     executor.ts            Executor runs + webhook handling
     nessie.ts              Nessie client, sync, execute
     labels.ts              Jev labeling
-    rules.ts               induction, validation, activation, memory sync
+    rules.ts               induction, validation, activation, digests
     apify.ts               ingest + callback
     http.ts                /creao-callback, /apify-callback, /co/*
     crons.ts
@@ -92,38 +93,33 @@ npx convex env set NAME value   # set a backend secret
 
 | Name | Purpose |
 | --- | --- |
-| `CREAO_DISPATCHER_KEY` | `cr_sk_` key of the **Dispatcher** account: Rooms API posting/reading |
-| `CREAO_OWNER_KEY` | `cr_sk_` key of the **founder** account: `/v1/runs` (Executor), agent memory, usage |
-| `CREAO_WEBHOOK_TOKEN` | random string appended to Executor `webhook_url` |
+| `CREAO_API_KEY` | `capi_` **account** key from agent.creao.ai → Settings → API Keys (runs any of the founder's agents). Used for every role-agent and Executor run |
+| `CREAO_WEBHOOK_TOKEN` | random string appended to every run's `webhookUrl` (`/creao-callback?token=…`) |
 | `NESSIE_API_KEY` | Nessie key (sent as `?key=`) |
 | `APIFY_TOKEN` | Apify API token |
 | `APIFY_WEBHOOK_TOKEN` | random string appended to Apify webhook URL |
 | `CO_TOKEN_SECRET` | HMAC secret for task-scoped `co` tokens |
 
-Agent IDs and room IDs are data, stored in the `agents` and `rooms` tables by the seed, not env vars.
+Agent App IDs and each agent's input field id are data, stored in the `agents` table by the seed, not env vars. Channels (`rooms` table) are Convex-only.
 
 ## External APIs: what is known
 
-### Creao (account-level API) — base `https://developer.creao.ai`, header `Authorization: Bearer cr_sk_…`
+### Creao API Trigger — base `https://agent.creao.ai`, header `Authorization: Bearer capi_…`
 
-Known from Creao docs:
-- `POST /v1/runs` `{agent_id, input, model?, conversation_id?, webhook_url?}` → 202 `{run_id, status, agent_id, conversation_id}`. `GET /v1/runs/{run_id}` → status `pending|running|completed|failed|cancelled`, `result`, `error.code`.
-- Webhook POST body includes `runId`, `status`, `conversationId`, `model`, `result` or `error`. Header `X-Creao-Delivery-Id` (same on every retry). Up to 3 attempts, 10 s timeout, no redirects. Delivery is at least once → dedupe. Webhooks are not signed → re-fetch the run and trust only that. A run that fails before starting sends **no** webhook → poll.
-- `GET|PUT|DELETE /v1/agents/{agent_id}/memory` — items `{name, content, trigger, rationale, status}`; PUT replaces the whole set; max 100 items, 8 KB each.
-- `GET /v1/account/usage` — remaining credits + rolling 24 h spend.
-- Rooms: `GET /v1/rooms`, `GET /v1/rooms/{room_id}`, `GET|POST /v1/rooms/{room_id}/messages`, `GET /v1/rooms/{room_id}/agents`, SSE `GET /v1/rooms/{room_id}/events`.
-  - POST message: `text` (1–16,000 chars), `client_msg_id` (idempotent; retry returns `duplicate: true`), `reply_to_seq`, `mentions` (member ids), `trigger_agents` (default true), `expand_shortcut` (default true). `@Name` in text resolves to a member; ambiguous → `400 ROOM_MENTION_AMBIGUOUS` with `candidates`. Response lists `agent_invocations`.
-  - GET messages: page by `seq` with one of `before` / `after` / `around`, `limit` ≤ 100 (default 50), or `root` for a thread; continue from `cursor_seq`.
-  - Agent reply: `sender.kind === "agent"` and `reply_to_seq` = the triggering message's `seq`; done when the agent's status returns to `idle` (or `failed`).
-  - Limits: 60 posts/min per account; **30 new agent-triggering posts per hour per account per room** (posts with `trigger_agents: false` don't count); 10 open event streams.
+This is the **only** Creao API we use. Known from Creao docs (https://docs.creao.ai/pro/api-trigger):
+- `POST /api/v1/runs` `{appId, inputs, webhookUrl?, threadId?, idempotencyKey?, chatModelId?}` → `202 {id, status, appId, appName}`. `inputs` keys match the agent's Input Form field ids. `idempotencyKey` 8–128 chars; same key returns the same run. `threadId` continues an earlier conversation.
+- `GET /api/v1/runs/{id}` → status `pending|running|completed|failed|cancelled`, `result {text, chatText?, artifacts[]}`, `threadId`, `errorCode`. `GET /api/v1/runs` lists; `POST /api/v1/runs/{id}/cancel` cancels.
+- Webhook POST to `webhookUrl` with `{runId, status, threadId, result}`; header `X-Creao-Delivery-Id` (same on every retry). Up to 3 attempts, 10 s timeout, no redirects; at least once → dedupe. Not signed → re-fetch the run and trust only that. A run that fails before starting sends **no** webhook → poll.
+- Every API run appears in the Creao sidebar as `[API] …` (shareable: use for Devpost run links).
 - Errors are `{ "error": "CODE" }`; `429` includes `Retry-After`.
 
+**Unavailable this weekend:** the CREAO CLI API on developer.creao.ai (`cr_sk_` keys: Rooms API, `/v1/agents/{id}/memory`, `/v1/account/usage`). Creao staff said not to use it. Do not write code against it. Creao rooms can still be used by hand in the UI, but Convex never reads or posts to them.
+
 `VERIFY` before relying on it:
-- Exact JSON shapes of room message objects (field names for `seq`, `sender`, `text`, thread root).
-- Whether an agent's reply that @mentions another agent wakes it (we forbid it either way).
-- Whether a fenced code block in an agent reply arrives intact via the API.
-- Whether room creation, announcements and scheduled messages are API-accessible (assume UI-only; seed stores room IDs).
-- Exact agent-status field in `GET /v1/rooms/{room_id}/agents`.
+- Each agent's Input Form field id (expected `message`; Executor `action`).
+- Which result field holds the reply (`result.text` vs `result.chatText`) and that a fenced `cofounder` block arrives intact.
+- That `threadId` continuation keeps the earlier turns in context.
+- Whether `chatModelId` is accepted for `anthropic/claude-sonnet-5-5` (omit it if rejected).
 
 ### Convex AI Gateway — base `https://ai-gateway.convex.dev`, token from `getServiceToken("ai-gateway")` inside an action (paid plan required; apply hackathon coupon)
 - Text: AI SDK `convexGateway("anthropic/<model>")` from `@convex-dev/ai-sdk-provider`; or `POST /v1/messages` (Anthropic shape). `VERIFY` the exact Claude model id with `GET /v1/models`.
@@ -138,13 +134,20 @@ Known from Creao docs:
 - Webhook events `ACTOR.RUN.SUCCEEDED` etc.; custom `payloadTemplate` with `{{resource}}` variables. Dataset items: `GET /v2/datasets/{datasetId}/items`.
 - Change-monitor Actor candidates: `monema/apify-change-monitor`, `scrapemint/website-change-monitor` — `VERIFY` input schema on the Actor page.
 
+## Plan constraints (founder account, Pro Plus)
+
+- **One founder account does everything.** The Dispatcher is code, not a Creao user. The `capi_` account key runs every agent.
+- **Executors.** One Executor per connector is still the safe default (`Executor-Linear` required for `file_bug`, `Executor-Gmail` optional for `reply_customer`); `schedule_digest` is in-app only.
+- **Schedules.** Standups and the weekly review are started by Convex crons, not Creao schedules.
+- **Credits.** Every run costs credits; the Rate Limiter caps 60 runs/hour/role. Spend is shown from our own `runs` table (no usage API).
+
 ## Conventions
 
 - TypeScript strict. Validators (`v.*`) on every Convex function argument. No `any` in `convex/lib`.
 - Pure logic (envelope parsing, rule matching, gate evaluation, novelty) lives in `convex/lib/` as plain functions with unit tests. Convex functions are thin wrappers.
 - External calls only in Convex **actions**; DB writes only in **mutations**. Actions call `ctx.runMutation` to persist.
-- Every external call has a timeout and an idempotency key where the API supports one (`client_msg_id`, Apify run ids, Nessie object ids stored on the action).
-- IDs: store Creao/Nessie/Apify ids as strings with the prefix in the field name (`creao_room_id`, `nessie_id`).
+- Every external call has a timeout and an idempotency key where the API supports one (Creao `idempotencyKey`, Apify run ids, Nessie object ids stored on the action).
+- IDs: store Creao/Nessie/Apify ids as strings with the prefix in the field name (`creao_app_id`, `creao_run_id`, `nessie_id`).
 - Money is integer cents everywhere (`amount_cents`). Never floats.
 - Times are epoch ms (`Date.now()`); display in America/Los_Angeles.
 - Logs: never log keys, tokens, or full customer emails.
@@ -152,44 +155,12 @@ Known from Creao docs:
 
 ## Demo company (fixture)
 
-Fictional SaaS **"Lumen Notes"** (AI meeting notes, $19/mo). Do not use real company names or branding in seed data. Competitors in Apify monitors may be real public URLs (read-only).
+Agents are **company-agnostic**: no company name in any agent prompt. The company comes from the `company` profile table, sent as a compact `company` block in every ASSIGN and in full via `co data company`. The demo profile is the fictional SaaS **"Lumen Notes"** (AI meeting notes, $35/mo Pro plan), seeded as data. Do not use real company names or branding in seed data. Competitors in Apify monitors may be real public URLs (read-only).
 
 ## Out of scope (do not build unless a spec says so)
 
 - Engineering department / code-writing agents (removed).
-- Creao workspaces (replaced by rooms).
+- Creao workspaces.
+- Creao Rooms API / CREAO CLI `/v1/*` (unavailable; see External APIs).
 - Real social posting (post queue is mock).
 - Auth beyond a single founder login.
-
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-Rules:
-- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
-- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
-
-Project notes:
-- Start every session (and every spec) with `graphify query` / `graphify explain` against the graph instead of re-reading `docs/system-design.md` and the specs in full. Open a spec file only for the exact section the graph points to.
-- The graph covers `docs/`, `agents/roles.md` and this file even though `docs/` is git-ignored: `graphify-out/.graphify_build.json` sets `gitignore: false` with explicit excludes (node_modules, convex/_generated, .claude, .convex, tsconfigs). Keep that config when rebuilding.
-- `graphify update .` only refreshes code. After editing any doc or spec, run `/graphify --update` so the semantic (doc) nodes are re-extracted.
-- `graphify-out/` is git-ignored (it summarizes the private docs).
-
-## Convex
-
-<!-- convex-ai-start -->
-
-This project uses [Convex](https://convex.dev) as its backend.
-
-When working on Convex code, **always read
-`convex/_generated/ai/guidelines.md` first** for important guidelines on
-how to correctly use Convex APIs and patterns. The file contains rules that
-override what you may have learned about Convex from training data.
-
-Convex agent skills for common tasks can be installed by running
-`npx convex ai-files install`.
-
-<!-- convex-ai-end -->
