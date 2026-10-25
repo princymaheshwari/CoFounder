@@ -16,7 +16,7 @@ import {
   parseEnvelope,
   type AssignArgs,
 } from "./lib/envelope";
-import { ruleInScope } from "./lib/rules";
+import { ruleForAssign } from "./lib/rules";
 import { TOKEN_TTL_MS, hashToken, signTaskToken } from "./lib/tokens";
 import { vRunPurpose, vRunStatus, type Department, type RunPurpose, type RunStatus } from "./lib/types";
 import { onExecutorResult } from "./executor";
@@ -63,8 +63,9 @@ async function assignArgs(ctx: MutationCtx, taskId: Id<"tasks">): Promise<{ args
   const company = await ctx.db.query("company").first();
   if (!company) throw new Error("company profile not seeded (npx convex run seed:config)");
 
-  // Active rules in scope for this role (spec 12 refines the selection by likely action types).
-  const rules = (await ctx.db.query("rules").take(500)).filter((r) => ruleInScope(r, task.role, agent.department));
+  // Spec 12 mirror: active, unexpired rules in scope for this role, of the action types it is likely to propose.
+  const now = Date.now();
+  const rules = (await ctx.db.query("rules").take(500)).filter((r) => ruleForAssign(r, task.role, agent.department, now));
   // Data hints travel with the event that created the task (spec 05 sets them).
   const event = task.event ? await ctx.db.get(task.event) : null;
   const hints: unknown = event?.payload && typeof event.payload === "object" ? (event.payload as { data_hints?: unknown }).data_hints : undefined;

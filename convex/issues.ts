@@ -4,11 +4,12 @@ import type { MutationCtx } from "./_generated/server";
 import { appendMessage, audit } from "./channels";
 import { assign, rerun } from "./dispatcher";
 import { scheduleExecution } from "./executor";
-import { currentBudget, customerFor, gateAction } from "./gate";
+import { currentBudget, decisionFeatures, gateAction } from "./gate";
 import { CATALOG } from "./lib/catalog";
-import { CO_VIEWS, DAY_MS, canRead } from "./lib/co";
+import { CO_VIEWS, canRead } from "./lib/co";
 import { MANAGER_ROLES, formatDecision, type Envelope, type ProposedAction } from "./lib/envelope";
-import type { DecisionChoice, IssueKind, Role } from "./lib/types";
+import type { ActionType, DecisionChoice, IssueKind, Role } from "./lib/types";
+import { suspendOverriddenRules } from "./rules";
 import { insertTask, proposeActions, transition } from "./tasks";
 
 // Issue ladder (spec 09, system-design §7): employee → manager → founder. Managers are woken by a new
@@ -450,8 +451,6 @@ async function recordDecisionMessage(ctx: MutationCtx, root: Id<"tasks">, decide
 
 // ---------------------------------------------------------------- founder decision
 
-const labelValues = (labels: Doc<"actions">["labels"]) => Object.fromEntries(Object.entries(labels ?? {}).map(([k, l]) => [k, l.value]));
-
 // Spec 09 step 5: decisions rows, approve/deny the actions (debiting budgets and executing what was approved),
 // DECISION in every origin thread, issues resolved, escalated tasks closed. One transaction.
 export async function recordFounderDecision(
@@ -478,32 +477,28 @@ export async function recordFounderDecision(
   }
 
   let decided = 0;
+  const decidedTypes = new Set<ActionType>();
   let chainId = issue?.chain_id;
   for (const id of actionIds) {
     const action = await ctx.db.get(id);
     if (!action || action.status !== "escalated") continue;
     chainId ??= action.chain_id;
-    const params = action.params && typeof action.params === "object" ? (action.params as Record<string, unknown>) : {};
-    const customer = await customerFor(ctx, params);
-    await ctx.db.insert("decisions", {
+    const features = await decisionFeatures(ctx, action, now);
+    const decisionId = await ctx.db.insert("decisions", {
       subject_kind: "action",
       action: id,
       ...(issue ? { issue: issue._id } : {}),
       action_type: action.type,
       choice: a.choice,
       ...(a.reason ? { reason: a.reason } : {}),
-      features: {
-        amount_cents: action.amount_cents ?? null,
-        counterparty: action.counterparty ?? null,
-        role: action.role,
-        gate_reason: action.gate?.reason ?? null,
-        ...(customer ? { tenure_days: Math.max(0, Math.floor((now - customer.signup_at) / DAY_MS)) } : {}),
-        ...labelValues(action.labels),
-      },
+      features,
       decided_by: "founder",
       created_at: now,
     });
     await ctx.db.patch(id, { status: a.choice === "approve" ? "approved" : "denied" });
+    // Spec 12: a decision against an active rule that covers it suspends that rule here, in this mutation.
+    await suspendOverriddenRules(ctx, action.type, { id: decisionId, action_type: action.type, choice: a.choice, features });
+    decidedTypes.add(action.type);
     decided++;
     if (a.choice !== "approve") continue;
     const entry = CATALOG[action.type];
@@ -536,6 +531,8 @@ export async function recordFounderDecision(
   for (const t of tasks) if (t.status === "escalated") await transition(ctx, t, "done", "founder_decision", { inboxId: a.inboxId });
 
   await ctx.db.patch(a.inboxId, { status: "decided" });
+  // Spec 12: enough consistent founder decisions of a type become a proposed rule.
+  for (const actionType of decidedTypes) await ctx.scheduler.runAfter(0, internal.rules.maybeInduce, { actionType });
   await audit(ctx, {
     actor: "founder",
     kind: "founder_decision",

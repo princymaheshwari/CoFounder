@@ -1,4 +1,23 @@
+import { getServiceToken } from "convex/server";
+import { v } from "convex/values";
 import { env, internalAction, query } from "./_generated/server";
+
+// Spec 00: confirms the AI Gateway token works and lists model ids, e.g.
+//   npx convex run health:gateway '{"match":"claude"}'
+export const gateway = internalAction({
+  args: { match: v.optional(v.string()) },
+  returns: v.object({ status: v.number(), models: v.array(v.string()) }),
+  handler: async (_ctx, { match }) => {
+    const base = (env.AI_GATEWAY_URL ?? "https://ai-gateway.convex.dev").replace(/\/+$/, "");
+    const res = await fetch(`${base}/v1/models`, {
+      headers: { Authorization: `Bearer ${await getServiceToken("ai-gateway")}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as { data?: { id?: unknown }[] };
+    const ids = (body.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === "string");
+    return { status: res.status, models: match ? ids.filter((id) => id.includes(match)) : ids };
+  },
+});
 
 // Placeholder read so the founder app can confirm it is connected to Convex.
 export const ping = query({

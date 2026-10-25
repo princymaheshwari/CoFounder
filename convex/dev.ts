@@ -131,12 +131,26 @@ export const dropCoSmokeTask = internalMutation({
   handler: async (ctx, { taskId }) => {
     const task = await ctx.db.get(taskId);
     if (task?.brief !== SMOKE_BRIEF) throw new Error(`${taskId} is not a co smoke-test task`);
-    // Also drop what dev:proposeAction hung off it: actions, their inbox items, and thread messages.
+    // Also drop what dev:proposeAction hung off it: actions, their inbox items, founder decisions, mock posts,
+    // rules learned from those decisions (spec 12) and their inbox items, and thread messages.
+    const inbox = await ctx.db.query("founder_inbox").take(1000);
+    const posts = await ctx.db.query("post_queue").take(1000);
+    const decisionIds = new Set<string>();
     for (const action of await ctx.db.query("actions").withIndex("by_task", (q) => q.eq("task", taskId)).take(100)) {
-      for (const item of await ctx.db.query("founder_inbox").withIndex("by_status", (q) => q.eq("status", "open")).take(500)) {
-        if (item.ref === action._id) await ctx.db.delete(item._id);
+      for (const item of inbox) if (item.ref === action._id) await ctx.db.delete(item._id);
+      for (const post of posts) if (post.action === action._id) await ctx.db.delete(post._id);
+      for (const d of await ctx.db.query("decisions").withIndex("by_action_type", (q) => q.eq("action_type", action.type)).take(1000)) {
+        if (d.action === action._id) {
+          decisionIds.add(d._id);
+          await ctx.db.delete(d._id);
+        }
       }
       await ctx.db.delete(action._id);
+    }
+    for (const rule of await ctx.db.query("rules").take(1000)) {
+      if (rule.status === "active" || !rule.supporting_decisions.some((d) => decisionIds.has(d))) continue;
+      for (const item of inbox) if (item.ref === rule._id) await ctx.db.delete(item._id);
+      await ctx.db.delete(rule._id);
     }
     for (const m of await ctx.db.query("messages").withIndex("by_task", (q) => q.eq("task", taskId)).take(500)) await ctx.db.delete(m._id);
     await ctx.db.delete(taskId);

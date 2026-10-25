@@ -1,7 +1,9 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { recordFounderDecision } from "./issues";
-import { vDecisionChoice, vInboxKind, vInboxStatus } from "./lib/types";
+import { vDecisionChoice, vInboxKind, vInboxStatus, type DecisionChoice } from "./lib/types";
+import { decideRule } from "./rules";
 
 // Founder inbox (spec 09): open items for the app, and the founder's approve / deny.
 // No auth yet: single-founder app, login is spec 14's. These are the only public functions that decide.
@@ -32,15 +34,26 @@ export const listOpen = query({
 const vDecideArgs = { inboxId: v.id("founder_inbox"), choice: vDecisionChoice, reason: v.optional(v.string()) };
 const vDecideResult = v.object({ actions: v.number(), threads: v.number(), issues: v.number() });
 
+// Rule items (spec 12) approve or reject the proposed rule; everything else decides actions and issues.
+async function decideItem(ctx: MutationCtx, a: { inboxId: Id<"founder_inbox">; choice: DecisionChoice; reason?: string }) {
+  const item = await ctx.db.get(a.inboxId);
+  if (item?.kind === "rule") {
+    if (item.status !== "open") throw new Error(`inbox item ${a.inboxId} is already decided`);
+    await decideRule(ctx, item, a.choice, a.reason);
+    return { actions: 0, threads: 0, issues: 0 };
+  }
+  return await recordFounderDecision(ctx, a);
+}
+
 export const decide = mutation({
   args: vDecideArgs,
   returns: vDecideResult,
-  handler: (ctx, a) => recordFounderDecision(ctx, { inboxId: a.inboxId, choice: a.choice, ...(a.reason?.trim() ? { reason: a.reason.trim() } : {}) }),
+  handler: (ctx, a) => decideItem(ctx, { inboxId: a.inboxId, choice: a.choice, ...(a.reason?.trim() ? { reason: a.reason.trim() } : {}) }),
 });
 
 // Same decision from the CLI: npx convex run inbox:decideInternal '{"inboxId":"…","choice":"approve"}'
 export const decideInternal = internalMutation({
   args: vDecideArgs,
   returns: vDecideResult,
-  handler: (ctx, a) => recordFounderDecision(ctx, a),
+  handler: (ctx, a) => decideItem(ctx, a),
 });

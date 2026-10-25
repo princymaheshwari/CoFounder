@@ -90,6 +90,7 @@ npx convex dev            # run backend, push schema/functions on save
 npm run dev               # frontend
 npx convex run seed:config   # seed agents + channels (rooms) rows from convex/seed.config.ts
 npx convex run health:check  # confirm CREAO_API_KEY reaches the API Trigger
+npx convex run health:gateway '{"match":"anthropic"}'  # confirm the AI Gateway token and list model ids
 npx convex run nessie:seedNessie   # seed the Nessie sandbox + customers/ledger_mirror/tickets (idempotent)
 npx convex run nessie:syncLedger   # mirror Nessie into ledger_mirror now (cron runs it every 10 min)
 npm test                  # vitest (convex-test for functions)
@@ -130,7 +131,7 @@ This is the **only** Creao API we use. Known from Creao docs (https://docs.creao
 - Whether `chatModelId` is accepted for `anthropic/claude-sonnet-5-5` (omit it if rejected).
 
 ### Convex AI Gateway — base `https://ai-gateway.convex.dev`, token from `getServiceToken("ai-gateway")` inside an action (paid plan required; apply hackathon coupon)
-- Text: AI SDK `convexGateway("anthropic/<model>")` from `@convex-dev/ai-sdk-provider`; or `POST /v1/messages` (Anthropic shape). `VERIFY` the exact Claude model id with `GET /v1/models`.
+- Text: AI SDK `convexGateway("anthropic/<model>")` from `@convex-dev/ai-sdk-provider`; or `POST /v1/messages` (Anthropic shape). Verified 2026-10-25 with `npx convex run health:gateway '{"match":"anthropic"}'`: Claude ids use dots, e.g. `anthropic/claude-sonnet-5.5`. Structured output: `generateText` + `Output.object` (`generateObject` is deprecated in `ai` 7).
 - Jev: `POST /alpha/decisions` `{model: "typesafe/jev-1.13", state, questions: {name: {type: "choice"|"score"|"noul", instructions, criteria?: {option: description}}}}` → `answers.name.{choice|score|noul, confidence?, probabilities?}`, `usage.cost` (USD). Verified 2026-10-24: a choice returns `confidence` + `probabilities`, a noul only `noul`. Alpha: wrap every call; failure ⇒ escalate, never block.
 - Embeddings: `POST /v1/embeddings` (OpenAI shape).
 

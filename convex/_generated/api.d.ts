@@ -40,6 +40,7 @@ import type * as lib_tokens from "../lib/tokens.js";
 import type * as lib_types from "../lib/types.js";
 import type * as nessie from "../nessie.js";
 import type * as nessieApi from "../nessieApi.js";
+import type * as rules from "../rules.js";
 import type * as seed from "../seed.js";
 import type * as seedData from "../seedData.js";
 import type * as tasks from "../tasks.js";
@@ -83,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   "lib/types": typeof lib_types;
   nessie: typeof nessie;
   nessieApi: typeof nessieApi;
+  rules: typeof rules;
   seed: typeof seed;
   seedData: typeof seedData;
   tasks: typeof tasks;

@@ -5,7 +5,7 @@ import { appendMessage, audit, getConfig } from "./channels";
 import { scheduleExecution } from "./executor";
 import { CATALOG } from "./lib/catalog";
 import { DAY_MS } from "./lib/co";
-import { evaluate, type GateConfig, type GateResult, type GateRule, type GateStats } from "./lib/gate";
+import { evaluate, features, type FeatureValue, type GateConfig, type GateResult, type GateRule, type GateStats } from "./lib/gate";
 import { budgetPeriod, type BudgetPeriodKind } from "./lib/time";
 import { vGateEffect, type ActionStatus, type ActionType, type GateEffect } from "./lib/types";
 import { CONFIG_DEFAULTS } from "./seed";
@@ -73,6 +73,28 @@ export async function customerFor(ctx: QueryCtx, params: Record<string, unknown>
   const ticketId = typeof params.ticket_id === "string" ? ctx.db.normalizeId("tickets", params.ticket_id) : null;
   const ticket = ticketId ? await ctx.db.get(ticketId) : null;
   return ticket?.customer ? await ctx.db.get(ticket.customer) : null;
+}
+
+// The features a founder decision records (spec 12): exactly what the gate's rule conditions read
+// (`features`), plus the department and bookkeeping, so a rule induced from decisions replays the same way.
+export async function decisionFeatures(ctx: QueryCtx, action: Doc<"actions">, now: number): Promise<Record<string, FeatureValue | null>> {
+  const params = action.params && typeof action.params === "object" ? (action.params as Record<string, unknown>) : {};
+  const agent = await ctx.db
+    .query("agents")
+    .withIndex("by_role", (q) => q.eq("role", action.role))
+    .unique();
+  const customer = await customerFor(ctx, params);
+  const department = agent?.department ?? "none";
+  const amount = action.amount_cents ?? CATALOG[action.type].amount(params);
+  return {
+    ...features(
+      { type: action.type, role: action.role, department, params, amount_cents: amount, labels: action.labels },
+      customer ? { tenure_days: Math.max(0, Math.floor((now - customer.signup_at) / DAY_MS)) } : undefined,
+    ),
+    department,
+    counterparty: action.counterparty ?? null,
+    gate_reason: action.gate?.reason ?? null,
+  };
 }
 
 async function gateConfig(ctx: MutationCtx): Promise<GateConfig> {

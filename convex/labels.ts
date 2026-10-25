@@ -226,7 +226,7 @@ export const labelActions = internalAction({
           if (gate) await ctx.runMutation(internal.gate.evaluateGate, { actionId });
           continue;
         }
-        const { labels, error, cost_usd } = await jevDecide(input.questions, input.state as Record<string, unknown>);
+        const { labels, error, cost_usd } = await jevDecide(input.questions, input.state);
         if (error) console.warn(`labels: action ${actionId}: ${error}`);
         await ctx.runMutation(internal.labels.saveLabels, { actionId, labels, gate, ...(error ? { error } : {}), ...(cost_usd !== undefined ? { cost_usd } : {}) });
       } catch (e) {
