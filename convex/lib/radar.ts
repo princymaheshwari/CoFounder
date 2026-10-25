@@ -42,3 +42,17 @@ export function normalizeLinkedInPost(item: unknown): RadarSignal | null {
   const significance = Math.min(0.9, 0.2 + Math.log10(1 + likes + 3 * comments + 5 * shares) / 5);
   return { url, change, significance: Math.round(significance * 100) / 100, evidence_url: url };
 }
+
+// Used only when Apify cannot run (no token, timeout, Actor down) and there is no scan from this week, so the flow
+// still has something to read. Labelled as samples in the signal itself and in the Dispatcher's note.
+export const SAMPLE_SOURCE = "linkedin-sample";
+export const SAMPLE_POSTS: RadarSignal[] = [
+  "Head of Product, 40-person SaaS: our biggest meeting cost isn't the meeting, it's the follow-up nobody sends. The note tools we kept are the ones that turn action items into tasks on people's calendars. (310 likes, 42 comments, 18 reposts)",
+  "Engineering manager: I stopped reading AI transcripts. What I want is a decision log: what we decided, who owns it, and a link to the moment it was said. (1,204 likes, 96 comments, 51 reposts)",
+  "Founder, B2B startup: the bar for AI notes moved this year. If the recap isn't in my inbox before I'm back at my desk, I've already forgotten half of it. (540 likes, 37 comments, 22 reposts)",
+  "Ops lead, remote team: we replaced two weekly status meetings with AI summaries of the meetings we already have. Saved 3 hours a week per manager. (880 likes, 61 comments, 40 reposts)",
+  "Security lead: before rolling out a meeting assistant we ask two questions. Does it announce itself to every attendee, and can we keep recordings in our region? (260 likes, 29 comments, 12 reposts)",
+].map((text, i) => {
+  const url = `https://example.com/linkedin-sample/${i + 1}`;
+  return { url, change: `Sample post · ${text}`, significance: 0.6, evidence_url: url };
+});

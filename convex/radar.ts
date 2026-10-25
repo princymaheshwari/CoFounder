@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import { env, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { appendMessage, audit } from "./channels";
 import { assign } from "./dispatcher";
-import { LINKEDIN_ACTOR, LINKEDIN_SOURCE, SCAN_REUSE_MS, linkedinInput, linkedinQueries, normalizeLinkedInPost, type RadarSignal } from "./lib/radar";
+import { LINKEDIN_ACTOR, LINKEDIN_SOURCE, SAMPLE_POSTS, SAMPLE_SOURCE, SCAN_REUSE_MS, linkedinInput, linkedinQueries, normalizeLinkedInPost, type RadarSignal } from "./lib/radar";
 
 // Company Radar for the weekly LinkedIn flow (spec 13). Before Market intel's run, Convex runs Apify's LinkedIn
 // post search for this week's posts in the company's category and stores them as signals; Market intel reads
@@ -101,8 +101,17 @@ export const finishScan = internalMutation({
       await ctx.db.insert("signals", { room: task.room, source: LINKEDIN_SOURCE, ...s, consumed: false, created_at: now });
       saved += 1;
     }
+    // Apify failed: fall back to the labelled sample posts (once), so the week still has something to read.
+    let samples = 0;
+    if (error) {
+      for (const s of SAMPLE_POSTS) {
+        if (known.has(s.url)) continue;
+        await ctx.db.insert("signals", { room: task.room, source: SAMPLE_SOURCE, ...s, consumed: false, created_at: now });
+        samples += 1;
+      }
+    }
     const text = error
-      ? `[Dispatcher] Company Radar (Apify) could not read LinkedIn this time (${error}). Market intel works from the signals already on file.`
+      ? `[Dispatcher] Company Radar (Apify) could not read LinkedIn this time (${error}). Market intel works from ${samples ? `${samples} saved sample posts` : "the sample posts already on file"}.`
       : reused
         ? `[Dispatcher] Company Radar (Apify) already read ${reused} LinkedIn posts from this week. Market intel works from that scan.`
         : `[Dispatcher] Company Radar (Apify) read ${saved} LinkedIn posts from this week about AI meeting notes.`;

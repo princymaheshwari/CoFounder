@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { ago, clock, plural } from "../lib/format";
-import { AssignBody, Digest, RadarLine } from "./Messages";
+import { AssignBody, Digest, PostedBadge, RadarLine } from "./Messages";
 import { RequestCard } from "./RequestCard";
 import { Avatar, DeptChip, Pill, ROOM_DEPT, useFresh, useNow, type Entry, type Overview } from "./ui";
 
@@ -91,7 +91,7 @@ function ThreadEntry({ entry, onOpen, selected, fresh, now }: { entry: Entry; on
               ))}
             </span>
             <span className="font-semibold text-ink-2 group-hover:underline">{t.replies ? plural(t.replies, "reply", "replies") : "No replies yet"}</span>
-            <Pill tone={status.tone}>{status.text}</Pill>
+            {t.lastKind === "posted" ? <PostedBadge channel={t.lastTo} small /> : <Pill tone={status.tone}>{status.text}</Pill>}
             <span className="min-w-0 max-w-[52ch] truncate text-muted">
               {t.last} <span className="text-faint">· {ago(t.lastAt, now)}</span>
             </span>

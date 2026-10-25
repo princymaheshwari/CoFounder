@@ -12,10 +12,15 @@ export const COMPANY = {
   customer_type: "small teams and solo professionals",
   voice: "warm, concise",
   policies: ["refunds within 30 days for billing errors"],
-  competitors: [], // real public URLs are allowed here for Apify monitors (spec 13)
+  // Real public pages are allowed here for Apify monitors (spec 13); onboarding can replace them.
+  competitors: [
+    { name: "Otter.ai", pricing_url: "https://otter.ai/pricing" },
+    { name: "Fireflies.ai", pricing_url: "https://fireflies.ai/pricing" },
+    { name: "Fathom", pricing_url: "https://www.fathom.ai/pricing" },
+  ],
   vendors: [{ name: "ModelAPI Co" }, { name: "CloudHost" }, { name: "MailTool" }],
   review_urls: [],
-  communities: [],
+  communities: ["LinkedIn: AI meeting notes", "r/productivity", "Product Hunt: meeting assistants"],
 };
 
 // Convex-only channels, rendered in the founder app Feed. Not Creao rooms.

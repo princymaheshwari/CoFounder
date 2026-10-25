@@ -9,6 +9,7 @@ import "./onboarding.css";
 // then drops the founder into the workspace (the company's rooms) on #customer.
 
 type Doc = { name: string; excerpt: string };
+type Competitor = { name: string; pricing_url?: string };
 type Task = { role: string; room: string; title: string; brief: string; trigger: "interval" | "event"; every_ms?: number; event_type?: string; cadence_label: string; flow?: "linkedin_weekly" };
 
 // How a flow moves through the company, for its plan card.
@@ -23,11 +24,31 @@ const EXAMPLE = {
   what: "AI meeting notes for product teams. Lumen records calls, writes the summary and action items, and syncs them to calendars and task tools. One $35/month Pro plan, mostly self-serve teams of 5–50.",
   priorities: "Answer every support ticket within an hour. Catch billing problems before customers do. Keep monthly churn under 3%.",
   goals: "Grow Pro from 1,200 to 2,000 paying teams by March. Keep vendor spend under $4k a month. Post one product update a week on LinkedIn and Instagram.",
+  // What the weekly LinkedIn post is about: Market intel matches it to this week's trends, Content writes it up.
+  shipped:
+    "Calendar sync is live: action items from a meeting land as tasks on each owner's Google or Outlook calendar.\n" +
+    "Decision log: every decision from the week's meetings on one page, linked to the moment it was said.\n" +
+    "Faster recaps: the summary reaches your inbox a median 38 seconds after the call ends, 40% sooner than last month.",
+  competitors: [
+    { name: "Otter.ai", pricing_url: "https://otter.ai/pricing" },
+    { name: "Fireflies.ai", pricing_url: "https://fireflies.ai/pricing" },
+    { name: "Fathom", pricing_url: "https://www.fathom.ai/pricing" },
+  ] as Competitor[],
   links: ["https://lumennotes.example/pricing", "https://lumennotes.example/changelog"],
   docs: [
     {
       name: "Q4 priorities.md",
       excerpt: "Q4: reduce support load (billing tickets are 40% of volume), launch calendar sync, test Instagram reels for top-of-funnel. Watch competitor pricing; two rivals cut prices in September.",
+    },
+    {
+      name: "Changelog - week of Oct 20.md",
+      excerpt:
+        "Shipped: Calendar sync (GA) for Google and Outlook; each action item becomes a task on its owner's calendar with a link back to the meeting. Decision log: a weekly page of every decision, who owns it, and a timestamp link. Recap speed: median time from call end to summary down from 64s to 38s. Fixed: some Pro renewals charged twice on Oct 22; affected customers are being refunded.",
+    },
+    {
+      name: "Brand voice.md",
+      excerpt:
+        "Warm, concise, specific. Lead with the customer's problem, then what changed and why it helps. Short paragraphs, no hype words (revolutionary, game-changing), no prices, no competitor names. At most one emoji. End with a question or a clear next step.",
     },
   ] as Doc[],
 };
@@ -62,7 +83,9 @@ export function Onboarding() {
   const planFn = useAction(api.onboarding.plan);
   const confirmFn = useMutation(api.onboarding.confirm);
 
-  const [form, setForm] = useState({ name: EXAMPLE.name, what: EXAMPLE.what, priorities: EXAMPLE.priorities, goals: EXAMPLE.goals });
+  const [form, setForm] = useState({ name: EXAMPLE.name, what: EXAMPLE.what, priorities: EXAMPLE.priorities, goals: EXAMPLE.goals, shipped: EXAMPLE.shipped });
+  const [competitors, setCompetitors] = useState<Competitor[]>(EXAMPLE.competitors);
+  const [rival, setRival] = useState("");
   const [links, setLinks] = useState<string[]>(EXAMPLE.links);
   const [link, setLink] = useState("");
   const [docs, setDocs] = useState<Doc[]>(EXAMPLE.docs);
@@ -81,8 +104,13 @@ export function Onboarding() {
   }, [step]);
 
   const agentName = (role: string) => overview?.agents.find((a) => a.role === role)?.name ?? humanRole(role);
-  const input = () => ({ ...form, links, docs });
+  const input = () => ({ ...form, competitors, links, docs });
 
+  const addRival = () => {
+    const name = rival.trim();
+    if (name && !competitors.some((c) => c.name.toLowerCase() === name.toLowerCase())) setCompetitors([...competitors, { name }]);
+    setRival("");
+  };
   const addLink = () => {
     const l = link.trim();
     if (l && !links.includes(l)) setLinks([...links, l]);
@@ -171,8 +199,41 @@ export function Onboarding() {
                 <span>Goals</span>
                 <textarea rows={2} value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })} />
               </label>
+              <label className="ob-field">
+                <span>What shipped this week</span>
+                <textarea rows={3} value={form.shipped} onChange={(e) => setForm({ ...form, shipped: e.target.value })} />
+              </label>
             </div>
             <div className="ob-col">
+              <div className="ob-field">
+                <span>Competitors to watch</span>
+                <div className="ob-linkrow">
+                  <input
+                    placeholder="Company name"
+                    value={rival}
+                    onChange={(e) => setRival(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addRival();
+                      }
+                    }}
+                  />
+                  <button type="button" className="lp-btn" onClick={addRival}>
+                    Add
+                  </button>
+                </div>
+                <div className="ob-chips">
+                  {competitors.map((c) => (
+                    <span key={c.name} className="ob-chip" title={c.pricing_url}>
+                      {c.name}
+                      <button type="button" aria-label={`Remove ${c.name}`} onClick={() => setCompetitors(competitors.filter((x) => x.name !== c.name))}>
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
               <div className="ob-field">
                 <span>Links</span>
                 <div className="ob-linkrow">

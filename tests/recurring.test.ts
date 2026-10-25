@@ -11,7 +11,7 @@ import { DEFAULT_PLAN, FLOW_SUFFIX, HOUR_MS, LINKEDIN_WEEKLY, MAX_RECURRING, REQ
 
 describe("normalizePlan", () => {
   const task = (over: Record<string, unknown> = {}) => ({
-    role: "market_intel",
+    role: "spend",
     title: "Scan trends",
     brief: "Review new signals and report three findings.",
     trigger: "interval",
@@ -22,7 +22,12 @@ describe("normalizePlan", () => {
 
   test("places each task in its owner's channel and converts hours to ms", () => {
     const mine = normalizePlan({ tasks: [task()] }).find((t) => t.title === "Scan trends");
-    expect(mine).toMatchObject({ room: "#marketing", trigger: "interval", every_ms: 48 * HOUR_MS });
+    expect(mine).toMatchObject({ room: "#finance", trigger: "interval", every_ms: 48 * HOUR_MS });
+  });
+
+  test("Claude's own Market intel and Content tasks give way to the LinkedIn flow", () => {
+    const plan = normalizePlan({ tasks: [task({ role: "market_intel", title: "Competitor watch" }), task({ role: "content", title: "Draft posts" })] });
+    expect(plan.filter((t) => t.room === "#marketing")).toEqual([LINKEDIN_WEEKLY]);
   });
 
   test("the weekly LinkedIn flow always leads #marketing", () => {
@@ -33,7 +38,7 @@ describe("normalizePlan", () => {
 
   test("drops unknown roles, the Executor and malformed tasks", () => {
     const plan = normalizePlan({ tasks: [task({ role: "executor" }), task({ role: "ceo" }), task({ title: "" }), task()] });
-    expect(plan.filter((t) => t.role === "market_intel" && !t.flow)).toHaveLength(1);
+    expect(plan.filter((t) => t.role === "spend" && t.title === "Scan trends")).toHaveLength(1);
     expect(plan.some((t) => (t.role as string) === "executor")).toBe(false);
   });
 
@@ -269,6 +274,25 @@ describe("the weekly LinkedIn flow", () => {
     expect(calls.filter((c) => c.includes("api.apify.com"))).toHaveLength(0);
     const msgs = await t.run(async (ctx) => await ctx.db.query("messages").collect());
     expect(msgs.some((m) => m.text.includes("already read 1 LinkedIn posts"))).toBe(true);
+  });
+
+  test("when Apify fails, labelled sample posts keep the week running", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 500 })),
+    );
+    const t = setup();
+    await t.mutation(internal.seed.config, {});
+    const [flow] = await t.mutation(api.onboarding.confirm, { input: INPUT, tasks: [LINKEDIN_WEEKLY] });
+    await t.action(internal.radar.scanThenAssign, { taskId: flow.taskId }); // APIFY_TOKEN is not set here
+    await t.run(async (ctx) => {
+      const signals = await ctx.db.query("signals").collect();
+      expect(signals.length).toBeGreaterThan(0);
+      expect(signals.every((s) => s.source === "linkedin-sample" && s.change.startsWith("Sample post"))).toBe(true);
+      const msgs = await ctx.db.query("messages").collect();
+      expect(msgs.some((m) => m.text.includes("could not read LinkedIn") && m.text.includes("sample posts"))).toBe(true);
+      expect(msgs.some((m) => m.task === flow.taskId && m.text.startsWith("[Dispatcher]"))).toBe(true); // assigned
+    });
   });
 
   test("a second confirm keeps the one approval rule", async () => {

@@ -64,20 +64,29 @@ function AssignMessage({ m }: { m: Message }) {
   );
 }
 
-// What the Executor published (post queue), shown as the post itself.
+const channelName = (c: string | null) => (c === "linkedin" ? "LinkedIn" : c ? c.charAt(0).toUpperCase() + c.slice(1) : "the web");
+
+// The blue "Posted on LinkedIn" badge, in the thread and on the thread's row in the room.
+export function PostedBadge({ channel, small }: { channel: string | null; small?: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full bg-[#0a66c2] font-semibold text-white shadow-[0_1px_2px_rgba(10,102,194,0.4)] ${small ? "px-2 py-0.5 text-[12px]" : "px-3.5 py-1.5 text-[13.5px]"}`}>
+      <span className={`grid place-items-center rounded-[3px] bg-white font-bold text-[#0a66c2] ${small ? "h-3.5 w-3.5 text-[9px]" : "h-4 w-4 text-[10.5px]"}`} aria-hidden>
+        in
+      </span>
+      Posted on {channelName(channel)}
+    </span>
+  );
+}
+
+// What the Executor published, shown as the post itself.
 export function PostedCard({ m }: { m: Message }) {
-  const channel = m.to === "linkedin" ? "LinkedIn" : (m.to ?? "the web");
   return (
     <div className="my-2 ml-11 rounded-[14px] border border-white/80 bg-white/85 px-4 py-3.5 shadow-[0_8px_24px_-12px_rgba(50,28,39,0.3)]">
-      <p className="flex items-center gap-2">
-        <span className="grid h-6 w-6 place-items-center rounded-[5px] bg-[#0a66c2] text-[12px] font-bold text-white" aria-hidden>
-          in
-        </span>
-        <span className="font-semibold text-ink">Posted on {channel}</span>
+      <p className="flex flex-wrap items-center gap-2">
+        <PostedBadge channel={m.to} />
         <span className="text-[12px] text-faint">{clock(m.at)}</span>
       </p>
-      <p className="mt-2 whitespace-pre-line text-[14.5px] leading-relaxed text-ink">{m.headline}</p>
-      <p className="mt-2 text-[11.5px] text-faint">Demo post queue · not sent to {channel}</p>
+      <p className="mt-3 whitespace-pre-line text-[14.5px] leading-relaxed text-ink">{m.headline}</p>
     </div>
   );
 }

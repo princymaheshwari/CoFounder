@@ -356,6 +356,7 @@ export default defineSchema({
         what: v.string(),
         priorities: v.string(),
         goals: v.string(),
+        shipped: v.optional(v.string()), // what shipped this week: the weekly LinkedIn post is about it
         links: v.array(v.string()),
         docs: v.array(v.object({ name: v.string(), excerpt: v.string() })),
         at: v.number(),

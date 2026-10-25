@@ -371,7 +371,7 @@ const vEntry = v.object({
   message: vMessage, // the thread's first message, or the standalone message
   thread: v.union(
     v.null(),
-    v.object({ root: v.id("tasks"), replies: v.number(), people: v.array(v.string()), lastAt: v.number(), status: v.string(), last: v.string(), waiting: v.boolean(), request: v.union(v.null(), vRequest) }),
+    v.object({ root: v.id("tasks"), replies: v.number(), people: v.array(v.string()), lastAt: v.number(), status: v.string(), last: v.string(), lastKind: v.string(), lastTo: v.union(v.string(), v.null()), waiting: v.boolean(), request: v.union(v.null(), vRequest) }),
   ),
 });
 
@@ -428,6 +428,8 @@ export const channel = query({
           lastAt: last.created_at,
           status: root?.status ?? "done",
           last: lastVM.headline,
+          lastKind: lastVM.kind,
+          lastTo: lastVM.to,
           waiting,
           request,
         },

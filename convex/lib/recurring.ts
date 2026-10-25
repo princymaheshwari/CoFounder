@@ -65,7 +65,13 @@ export const RECURRING_SUFFIX = "This is a recurring check: reply with one REPOR
 // What a flow's first agent is told to reply with, in place of RECURRING_SUFFIX.
 export const FLOW_SUFFIX: Record<Flow, string> = {
   linkedin_weekly:
-    `Reply with one HANDOFF to_role "content": summary = the trends in one or two sentences, findings = one per trend with the post's evidence_url, brief = the angle for this week's LinkedIn post about our own product development. The post must not name competitors or mention prices.`,
+    'Then read what we shipped this week (co data company: onboarding.shipped) and pick the update that best answers a trend. ' +
+    // No backtick fences here: this text travels inside the ASSIGN's own cofounder block.
+    "Reply with exactly one HANDOFF to content as your cofounder envelope, filled in from this shape: " +
+    '{"type": "HANDOFF", "task": "<your task id>", "from": "market_intel", "to_role": "content", ' +
+    '"summary": "<the trends, in one or two sentences>", "findings": [{"claim": "<a trend>", "evidence": "<the evidence_url of a post showing it>"}], ' +
+    '"brief": "<the angle for this week\'s LinkedIn post: which shipped update to feature and the trend it answers>"}. ' +
+    "The post must not name competitors or mention prices.",
 };
 
 // The standing rule a flow's approval creates at onboarding: the founder approved the outcome once, so the gate
@@ -97,6 +103,9 @@ export function parseRecurringBrief(brief: string): { cadence: string; title: st
   for (const f of FLOWS) body = body.replace(FLOW_SUFFIX[f], "");
   return { cadence: m[1], title: m[2], brief: body.trim() };
 }
+
+// Roles whose recurring work is the LinkedIn flow; Claude's own tasks for them are dropped.
+const FLOW_ROLES = new Set<RecurringRole>(["market_intel", "content"]);
 
 // The weekly LinkedIn post flow (#marketing). Always part of the plan.
 export const LINKEDIN_WEEKLY: PlanTask = {
@@ -160,6 +169,7 @@ export function normalizePlan(raw: unknown): PlanTask[] {
     const parsed = taskSchema.safeParse(item);
     if (!parsed.success) continue;
     const t = parsed.data;
+    if (FLOW_ROLES.has(t.role)) continue; // Market intel and Content work in the LinkedIn flow
     const key = `${t.role}:${t.title.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -186,6 +196,8 @@ export type OnboardingInput = {
   what: string;
   priorities: string;
   goals: string;
+  shipped?: string; // what shipped this week: the weekly post is about it
+  competitors?: { name: string; pricing_url?: string }[];
   links: string[];
   docs: { name: string; excerpt: string }[];
 };
@@ -215,6 +227,8 @@ export function planPrompt(o: OnboardingInput): string {
     `What we do: ${o.what}`,
     `Priorities this quarter: ${o.priorities}`,
     `Goals: ${o.goals}`,
+    o.shipped ? `Shipped this week: ${o.shipped}` : "",
+    o.competitors?.length ? `Competitors: ${o.competitors.map((c) => c.name).join(", ")}` : "",
     o.links.length ? `Links: ${o.links.join(", ")}` : "",
     docs ? `Documents:\n${docs}` : "",
   ]

@@ -25,6 +25,8 @@ const vOnboarding = v.object({
   what: v.string(),
   priorities: v.string(),
   goals: v.string(),
+  shipped: v.optional(v.string()),
+  competitors: v.optional(v.array(v.object({ name: v.string(), pricing_url: v.optional(v.string()) }))),
   links: v.array(v.string()),
   docs: v.array(v.object({ name: v.string(), excerpt: v.string() })),
 });
@@ -48,6 +50,8 @@ function bounded(o: OnboardingInput): OnboardingInput {
     what: o.what.slice(0, 2_000),
     priorities: o.priorities.slice(0, 2_000),
     goals: o.goals.slice(0, 2_000),
+    ...(o.shipped ? { shipped: o.shipped.slice(0, 2_000) } : {}),
+    ...(o.competitors ? { competitors: o.competitors.slice(0, 6).map((c) => ({ name: c.name.slice(0, 80), ...(c.pricing_url ? { pricing_url: c.pricing_url.slice(0, 300) } : {}) })) } : {}),
     links: o.links.slice(0, 10).map((l) => l.slice(0, 300)),
     docs: o.docs.slice(0, 5).map((d) => ({ name: d.name.slice(0, 120), excerpt: d.excerpt.slice(0, 4_000) })),
   };
@@ -147,8 +151,13 @@ export const confirm = mutation({
     const now = Date.now();
     const company = await ctx.db.query("company").first();
     if (company) {
-      const { what, priorities, goals, links, docs } = bounded(input);
-      await ctx.db.patch("company", company._id, { onboarding: { what, priorities, goals, links, docs, at: now }, updated_at: now });
+      // Agents read all of this with `co data company`; competitors also drive Company Radar's searches.
+      const { what, priorities, goals, shipped, competitors, links, docs } = bounded(input);
+      await ctx.db.patch("company", company._id, {
+        onboarding: { what, priorities, goals, ...(shipped ? { shipped } : {}), links, docs, at: now },
+        ...(competitors?.length ? { competitors } : {}),
+        updated_at: now,
+      });
     }
 
     const earlier = await ctx.db
