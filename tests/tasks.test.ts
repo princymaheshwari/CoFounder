@@ -186,6 +186,18 @@ describe("replies", () => {
     expect((await transitions(t, taskId)).at(-1)).toEqual(["replied", "gated"]);
   });
 
+  test("each proposed action is then decided by the gate (spec 07)", async () => {
+    const t = setup();
+    const taskId = await openTask(t);
+    await reply(t, taskId, { type: "REPORT", proposed_actions: [refund] });
+    await drain(t);
+    const [action] = await t.run((ctx) => ctx.db.query("actions").withIndex("by_task", (q) => q.eq("task", taskId)).collect());
+    // No labels and no known customer, so seeded R7 cannot match.
+    expect(action).toMatchObject({ status: "escalated", amount_cents: 3500, gate: { effect: "escalate", reason: "default:no_rule" } });
+    const inbox = await t.run((ctx) => ctx.db.query("founder_inbox").collect());
+    expect(inbox.map((i) => i.ref)).toEqual([action._id]);
+  });
+
   test("ISSUE → escalated with an issue for the employee's manager", async () => {
     const t = setup();
     const taskId = await openTask(t);

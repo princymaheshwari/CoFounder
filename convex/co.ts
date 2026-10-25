@@ -19,7 +19,7 @@ import {
   type CoView,
 } from "./lib/co";
 import { ruleInScope } from "./lib/rules";
-import { laDate } from "./lib/time";
+import { laDate, laWeekStart } from "./lib/time";
 import { TOKEN_TTL_MS } from "./lib/tokens";
 import { ACTION_TYPES, ROLES, vActionType, vRole, type ActionType, type Role } from "./lib/types";
 import { verifyTaskAccess } from "./tasks";
@@ -278,10 +278,13 @@ async function signalsView(ctx: QueryCtx, room: Id<"rooms">, limit: number): Pro
 }
 
 async function budgetView(ctx: QueryCtx, now: number): Promise<ViewResult> {
+  // Daily budgets are keyed by today, weekly ones by this week's Monday (spec 07).
   const period = laDate(now);
-  const rows = (await ctx.db.query("budgets").take(500)).filter((b) => b.period === period);
+  const periods = new Set([period, laWeekStart(now)]);
+  const rows = (await ctx.db.query("budgets").take(500)).filter((b) => periods.has(b.period));
   const budgets = rows.map((b) => ({
     scope: b.scope,
+    period: b.period,
     limit_cents: b.limit_cents,
     spent_cents: b.spent_cents,
     remaining_cents: b.limit_cents - b.spent_cents,

@@ -410,7 +410,7 @@ describe("co data views", () => {
     const { token } = await taskFor(t, "spend");
     expect((await get(t, "/co/data?view=budget", token)).body).toEqual({
       period: today,
-      budgets: [{ scope: "company:refund", limit_cents: 10000, spent_cents: 3500, remaining_cents: 6500 }],
+      budgets: [{ scope: "company:refund", period: today, limit_cents: 10000, spent_cents: 3500, remaining_cents: 6500 }],
     });
   });
 
