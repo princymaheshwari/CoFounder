@@ -70,7 +70,7 @@ export const FLOW_SUFFIX: Record<Flow, string> = {
     "Reply with exactly one HANDOFF to content as your cofounder envelope, filled in from this shape: " +
     '{"type": "HANDOFF", "task": "<your task id>", "from": "market_intel", "to_role": "content", ' +
     '"summary": "<the trends, in one or two sentences>", "findings": [{"claim": "<a trend>", "evidence": "<the evidence_url of a post showing it>"}], ' +
-    '"brief": "<the angle for this week\'s LinkedIn post: which shipped update to feature and the trend it answers>"}. ' +
+    '"brief": "<the angle for this week\'s LinkedIn post: which shipped update to feature, the trend it answers, and the evidence_urls Content should cite as its findings>"}. ' +
     "The post must not name competitors or mention prices.",
 };
 

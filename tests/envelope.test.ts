@@ -209,7 +209,7 @@ describe("Dispatcher formatters", () => {
       token: "tok",
       rules_in_scope: assign.rules,
       data_hints: assign.dataHints,
-      reply: "End your reply with exactly one cofounder envelope. Never address other agents directly.",
+      reply: "End your reply with exactly one cofounder envelope: a fenced block whose info string is cofounder, written out in full in this reply. Never describe or summarize an envelope instead of writing it. Never address other agents directly.",
       refs: [],
     });
   });

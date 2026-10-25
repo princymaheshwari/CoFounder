@@ -304,3 +304,34 @@ describe("the weekly LinkedIn flow", () => {
     expect(rules).toHaveLength(1);
   });
 });
+
+describe("the app hides a rejected reply the agent fixed on its retry", () => {
+  test("thread and channel drop the rejected reply and the repair request, and keep an unfixed one", async () => {
+    const t = setup();
+    await t.mutation(internal.seed.config, {});
+    const ids = await t.run(async (ctx) => {
+      const room = (await ctx.db.query("rooms").withIndex("by_name", (q) => q.eq("name", "#marketing")).unique())!;
+      const now = Date.now();
+      const task = (role: "content" | "market_intel") =>
+        ctx.db.insert("tasks", { role, room: room._id, kind: "work", brief: "b", chain_id: `c_${role}`, hop: 0, attempt: 1, status: "replied", origin_refs: [], deadline: now, mode: "live", created_at: now, updated_at: now });
+      const fixed = await task("content");
+      const unfixed = await task("market_intel");
+      let seq = 1;
+      const msg = (taskId: typeof fixed, m: { sender_kind: "agent" | "system"; text: string; envelope?: unknown; envelope_error?: string }) =>
+        ctx.db.insert("messages", { room: room._id, task: taskId, thread: taskId, seq: seq++, sender_name: m.sender_kind === "agent" ? "Content" : "Dispatcher", created_at: now + seq, ...m });
+      await msg(fixed, { sender_kind: "system", text: '[Dispatcher] @Content New task.\n\n```cofounder\n{"type":"ASSIGN","task":"x","to":"content","brief":"Draft the post."}\n```' });
+      await msg(fixed, { sender_kind: "agent", text: "I sent it as a REPORT.", envelope_error: "No envelope found" });
+      await msg(fixed, { sender_kind: "system", text: '[Dispatcher] @Content Repair on task x (attempt 2): your envelope was invalid.\n\n```cofounder\n{"type":"ASSIGN","task":"x","to":"content","brief":"Resend.","repair":"No envelope found"}\n```' });
+      await msg(fixed, { sender_kind: "agent", text: "ok", envelope: { type: "REPORT", task: "x", from: "content", summary: "Drafted the post." } });
+      await msg(unfixed, { sender_kind: "agent", text: "no block", envelope_error: "No envelope found" });
+      return { room: room._id, fixed, unfixed };
+    });
+    const thread = await t.query(api.feed.thread, { taskId: ids.fixed });
+    expect(thread.messages.map((m) => m.kind)).toEqual(["assign", "reply"]);
+    const unfixed = await t.query(api.feed.thread, { taskId: ids.unfixed });
+    expect(unfixed.messages.map((m) => m.kind)).toEqual(["invalid"]);
+    const channel = await t.query(api.feed.channel, { roomId: ids.room });
+    const entry = channel.entries.find((e) => e.thread?.root === ids.fixed)!;
+    expect(entry.thread!.replies).toBe(1);
+  });
+});

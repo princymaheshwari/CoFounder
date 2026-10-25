@@ -270,7 +270,8 @@ export type AssignArgs = {
   headline?: string; // human line; defaults to the brief's first line
 };
 
-const REPLY_RULE = "End your reply with exactly one cofounder envelope. Never address other agents directly.";
+const REPLY_RULE =
+  "End your reply with exactly one cofounder envelope: a fenced block whose info string is cofounder, written out in full in this reply. Never describe or summarize an envelope instead of writing it. Never address other agents directly.";
 
 function oneLine(s: string, max = 200): string {
   const line = s.replace(/`/g, "'").split(/\r?\n/)[0].trim();

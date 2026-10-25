@@ -137,7 +137,7 @@ export function AgentReply({ m }: { m: Message }) {
           {m.run ? <span className="text-[12px] text-faint">Creao run {m.run.slice(0, 8)}</span> : null}
         </p>
         {m.kind === "invalid" ? (
-          <p className="mt-1 rounded-md bg-stop-soft px-3 py-2 text-[14px] text-stop">{m.headline}</p>
+          <p className="mt-0.5 text-[14px] text-muted">Its reply wasn't in the agreed format, so the Dispatcher didn't act on it.</p>
         ) : (
           <p className="mt-0.5 max-w-[68ch] text-[15px] text-ink">{m.headline}</p>
         )}

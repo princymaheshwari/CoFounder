@@ -239,6 +239,7 @@ async function messageVM(ctx: QueryCtx, m: Doc<"messages">, names: Map<string, s
   const { line, env } = block(m.text);
   if (m.inbox) return { ...common, kind: "request", headline: tidy(line.replace(/^@Founder\s*/, "")) };
   const type = typeof env?.type === "string" ? env.type : null;
+  if (type === "ASSIGN" && typeof env?.repair === "string") return { ...common, kind: "repair", headline: "Asked for the reply again in the right format" };
   if (type === "ASSIGN") {
     const to = typeof env?.to === "string" ? env.to : null;
     const isHandoff = /handoff from/i.test(line);
@@ -262,6 +263,15 @@ async function messageVM(ctx: QueryCtx, m: Doc<"messages">, names: Map<string, s
     return { ...common, kind: "digest", headline: tidy(line), rules: Array.isArray(env?.rules) ? (env.rules as unknown[]).map(String) : [] };
   }
   return { ...common, kind: "note", headline: tidy(line) };
+}
+
+// A reply the validator rejected, then fixed by the agent on its one retry, is noise in the conversation: once a
+// valid reply exists for that task, hide the rejected reply and the repair request (the audit log keeps both).
+// A reply that was never fixed stays visible: that one climbed to the manager as an ISSUE.
+const isRepairRequest = (m: Doc<"messages">) => m.sender_kind === "system" && /^\[Dispatcher\] @.+? Repair on task /.test(m.text);
+function hideRepaired(msgs: Doc<"messages">[]): Doc<"messages">[] {
+  const fixed = new Set(msgs.filter((m) => m.sender_kind === "agent" && m.envelope && m.task).map((m) => m.task as string));
+  return msgs.filter((m) => !(m.task && fixed.has(m.task) && ((m.sender_kind === "agent" && !m.envelope) || isRepairRequest(m))));
 }
 
 async function displayNames(ctx: QueryCtx): Promise<Map<string, string>> {
@@ -383,12 +393,15 @@ export const channel = query({
     const room = await ctx.db.get(roomId);
     if (!room) throw new Error("channel not found");
     const names = await displayNames(ctx);
-    const rows = await ctx.db
-      .query("messages")
-      .withIndex("by_room_seq", (q) => q.eq("room", roomId))
-      .order("desc")
-      .take(400);
-    rows.reverse();
+    const rows = hideRepaired(
+      (
+        await ctx.db
+          .query("messages")
+          .withIndex("by_room_seq", (q) => q.eq("room", roomId))
+          .order("desc")
+          .take(400)
+      ).reverse(),
+    );
     const threads = new Map<string, Doc<"messages">[]>();
     const entries: (typeof vEntry.type)[] = [];
     const order: (string | Doc<"messages">)[] = [];
@@ -465,10 +478,12 @@ export const thread = query({
     const task = await ctx.db.get(taskId);
     if (!task) throw new Error("thread not found");
     const names = await displayNames(ctx);
-    const msgs = await ctx.db
-      .query("messages")
-      .withIndex("by_thread", (q) => q.eq("thread", taskId))
-      .take(300);
+    const msgs = hideRepaired(
+      await ctx.db
+        .query("messages")
+        .withIndex("by_thread", (q) => q.eq("thread", taskId))
+        .take(300),
+    );
     const taskIds = [...new Set([taskId, ...msgs.map((m) => m.task).filter((t): t is Id<"tasks"> => !!t)])];
     const actions = [];
     for (const t of taskIds) {
