@@ -350,8 +350,38 @@ export default defineSchema({
     vendors: v.array(v.object({ name: v.string(), pricing_url: v.optional(v.string()) })),
     review_urls: v.array(v.string()),
     communities: v.array(v.string()),
+    // What the founder wrote at onboarding (#start); the recurring plan was drawn from it.
+    onboarding: v.optional(
+      v.object({
+        what: v.string(),
+        priorities: v.string(),
+        goals: v.string(),
+        links: v.array(v.string()),
+        docs: v.array(v.object({ name: v.string(), excerpt: v.string() })),
+        at: v.number(),
+      }),
+    ),
     updated_at: v.number(),
   }),
+
+  // Recurring work set up at onboarding. Each row has one thread in its owner's channel; every run posts there.
+  recurring: defineTable({
+    role: vRole,
+    room: v.id("rooms"),
+    title: v.string(),
+    brief: v.string(),
+    cadence_label: v.string(),
+    trigger: v.union(v.literal("interval"), v.literal("event")),
+    every_ms: v.optional(v.number()),
+    event_type: v.optional(v.string()),
+    next_run_at: v.optional(v.number()), // interval rows only
+    thread: v.id("tasks"), // the first run's task: the thread root every later run writes into
+    runs: v.number(),
+    active: v.boolean(),
+    created_at: v.number(),
+  })
+    .index("by_active_and_next_run_at", ["active", "next_run_at"])
+    .index("by_active_and_event_type", ["active", "event_type"]),
 
   config: defineTable({
     key: v.string(),

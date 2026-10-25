@@ -47,7 +47,7 @@ export function Landing() {
       <video className="lp-motion lp-motion--wide" autoPlay muted loop playsInline preload="auto" aria-hidden="true" poster={POSTER_WIDE} src={VIDEO_WIDE} />
       <video className="lp-motion lp-motion--narrow" autoPlay muted loop playsInline preload="none" aria-hidden="true" poster={POSTER_NARROW} src={VIDEO_NARROW} />
 
-      {/* Stacked and centred on narrow screens; on a laptop the name sits left and the pitch right, like the design's masthead. */}
+      {/* Stacked and centred on narrow screens; on a laptop the name sits left and Get started top-right, like the design's masthead. */}
       <header className="lp-hero">
         <div className="lp-hero__name">
           <h1 className="lp-title">CoFounder</h1>
@@ -56,18 +56,9 @@ export function Landing() {
           </p>
         </div>
         <div className="lp-hero__pitch">
-          <p className="lp-intro">
-            Eleven AI agents run your company, talking to each other in typed, threaded department channels. A deterministic gate learns your authority from your own decisions, so you only
-            decide what no rule covers.
-          </p>
-          <div className="lp-cta">
-            <a className="lp-btn lp-btn--primary" href="#desk">
-              Open the founder desk
-            </a>
-            <a className="lp-btn" href="#rules">
-              See the rulebook
-            </a>
-          </div>
+          <a className="lp-btn lp-btn--primary lp-btn--start" href="#start">
+            Get started <span aria-hidden="true">→</span>
+          </a>
         </div>
       </header>
 

@@ -289,7 +289,7 @@ export const status = query({
 
 // ---------------------------------------------------------------- reset
 
-const WIPE = ["messages", "tasks", "actions", "issues", "decisions", "rules", "founder_inbox", "audit_log", "events", "runs", "post_queue", "outbox", "budgets"] as const;
+const WIPE = ["messages", "tasks", "actions", "issues", "decisions", "rules", "founder_inbox", "audit_log", "events", "runs", "post_queue", "outbox", "budgets", "recurring"] as const;
 
 // Clears every conversation, decision and rule (then re-seeds R7), keeping agents, channels, company,
 // customers, Nessie mirror and seeded tickets. Run before a demo. Scheduled runs already in flight are not cancelled.
@@ -327,4 +327,39 @@ export const resetInternal = internalMutation({
   args: {},
   returns: v.record(v.string(), v.number()),
   handler: (ctx) => resetDemo(ctx),
+});
+
+// ---------------------------------------------------------------- live prime
+
+const PRIME_SUBJECT = "Charged twice this month"; // a seeded double-charge ticket (seedData.ts, flow A)
+
+// Before a pitch: reset, then send one seeded double-charge ticket through the pipeline in live mode, so real
+// Creao runs climb Support → Customer manager → Ledger → Finance manager → Cofounder (about 4–6 minutes) and the
+// package is waiting on #founder-desk when the demo starts. Run: npx convex run story:primeLive
+export const primeLive = internalMutation({
+  args: {},
+  returns: v.object({ wiped: v.record(v.string(), v.number()), ticket: v.id("tickets"), taskId: v.id("tasks") }),
+  handler: async (ctx) => {
+    requireDemo();
+    const wiped = await resetDemo(ctx);
+    const tickets = await ctx.db.query("tickets").take(2000);
+    const ticket = tickets.find((t) => t.subject === PRIME_SUBJECT && t.customer) ?? tickets.find((t) => /twice|duplicate/i.test(t.subject) && t.customer);
+    if (!ticket) throw new Error("no seeded double-charge ticket; run npx convex run nessie:seedNessie");
+    const eventId = await ctx.db.insert("events", {
+      type: "support_ticket",
+      payload: {
+        ticket: ticket._id,
+        customer: ticket.customer,
+        brief: `Handle ticket ${ticket._id}: "${ticket.subject}" ${ticket.body}`,
+        data_hints: [`co data ticket --id ${ticket._id}`, `co data customer --id ${ticket.customer}`, "co data tickets"],
+      },
+      source: "seed", // seed events run live (taskFromEvent)
+      processed: false,
+      created_at: Date.now(),
+    });
+    await audit(ctx, { actor: "founder", kind: "story_act", ref: "prime_live" });
+    const created = await taskFromEvent(ctx, eventId);
+    if (!created) throw new Error(`event ${eventId} was already processed`);
+    return { wiped, ticket: ticket._id, taskId: created.taskId };
+  },
 });

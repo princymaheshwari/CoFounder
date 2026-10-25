@@ -12,4 +12,7 @@ crons.interval("checkStuckTasks", { minutes: 1 }, internal.tasks.checkStuckTasks
 // Mirrors the Nessie sandbox into ledger_mirror (spec 08); seed and execution also mirror immediately.
 crons.interval("syncLedger", { minutes: 10 }, internal.nessie.syncLedger, {});
 
+// Starts the next run of each due recurring task from onboarding, in its existing thread.
+crons.interval("runRecurring", { minutes: 1 }, internal.onboarding.runDue, {});
+
 export default crons;

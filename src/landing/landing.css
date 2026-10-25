@@ -71,6 +71,9 @@
   flex-direction: column;
   align-items: center;
 }
+.lp-hero__pitch {
+  margin-top: clamp(14px, 2.4vh, 26px);
+}
 
 .lp-title {
   margin: 0;
@@ -111,24 +114,7 @@
   fill: currentColor;
 }
 
-.lp-intro {
-  max-width: 52em;
-  margin: clamp(8px, 1.4vh, 16px) 0 0;
-  color: var(--copy);
-  font-size: clamp(14px, min(1.18vw, 2.1vh), 17px);
-  letter-spacing: -0.012em;
-  line-height: 1.6;
-  animation: lp-support 0.72s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
-}
 
-.lp-cta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin-top: clamp(12px, 2vh, 22px);
-  animation: lp-support 0.72s cubic-bezier(0.22, 1, 0.36, 1) 0.36s both;
-}
 .lp-btn {
   display: inline-flex;
   align-items: center;
@@ -156,6 +142,13 @@
   color: #fff;
   background: var(--ink);
   border-color: var(--ink);
+}
+.lp-btn--start {
+  gap: 10px;
+  height: 50px;
+  padding: 0 26px;
+  font-size: 16px;
+  animation: lp-support 0.72s cubic-bezier(0.22, 1, 0.36, 1) 0.36s both;
 }
 .lp-btn:focus-visible {
   outline: 3px solid rgba(173, 49, 77, 0.5);
@@ -718,28 +711,25 @@
 
   .lp-hero {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, clamp(340px, 34vw, 560px));
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
     gap: clamp(24px, 4vw, 72px);
     width: min(100%, var(--content-max));
     text-align: left;
   }
-  .lp-hero__name,
-  .lp-hero__pitch {
+  .lp-hero__name {
     align-items: flex-start;
+  }
+  .lp-hero__pitch {
+    align-self: start;
+    align-items: flex-end;
+    margin-top: 0;
+    padding-top: clamp(8px, 2vh, 24px);
   }
   .lp-title {
     font-size: clamp(64px, min(9.6vw, 13.5vh), 168px);
   }
   .lp-slogan {
-    justify-content: flex-start;
-  }
-  .lp-intro {
-    margin: 0;
-    max-width: none;
-    font-size: clamp(14.5px, min(1.12vw, 2.3vh), 18px);
-  }
-  .lp-cta {
     justify-content: flex-start;
   }
 
@@ -833,8 +823,6 @@
   }
   .lp-title,
   .lp-slogan,
-  .lp-intro,
-  .lp-cta,
   .lp-stage,
   .lp-msg__line,
   .lp-chip,

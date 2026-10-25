@@ -120,7 +120,30 @@ export async function taskFromEvent(
   });
   await ctx.db.patch(eventId, { processed: true });
   const messageId = await assign(ctx, taskId);
+  await noteRecurringEvent(ctx, event.type, route.role);
   return { taskId, messageId };
+}
+
+// An event a recurring thread follows (onboarding, e.g. "as soon as a ticket arrives") leaves a one-line note
+// in that thread. The event's task keeps its own thread, so handling and the issue ladder are unchanged.
+async function noteRecurringEvent(ctx: MutationCtx, eventType: string, role: Role): Promise<void> {
+  const rows = await ctx.db
+    .query("recurring")
+    .withIndex("by_active_and_event_type", (q) => q.eq("active", true).eq("event_type", eventType))
+    .take(5);
+  if (!rows.length) return;
+  const name = (await agentFor(ctx, role))?.display_name ?? role;
+  for (const r of rows) {
+    const root = await ctx.db.get("tasks", r.thread);
+    if (!root) continue;
+    await appendMessage(ctx, {
+      room: root.room,
+      task: root._id,
+      sender_kind: "system",
+      sender_name: "Dispatcher",
+      text: `[Dispatcher] New ${eventType.replace(/_/g, " ")}: ${name} picked it up in its own thread.`,
+    });
+  }
 }
 
 export const createTaskFromEvent = internalMutation({

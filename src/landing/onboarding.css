@@ -1,0 +1,415 @@
+/* Onboarding (#start). Builds on the landing tokens (.lp): paper stage, Inter, glass card, department gradients. */
+
+.lp.ob {
+  height: auto;
+  min-height: 100svh;
+  justify-content: flex-start;
+  gap: clamp(14px, 2.4vh, 26px);
+}
+
+.ob-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: min(100%, 1720px);
+}
+.ob-brand {
+  color: var(--ink);
+  font-size: clamp(26px, 2.4vw, 36px);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.ob-steps {
+  display: flex;
+  gap: clamp(10px, 1.6vw, 26px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  color: #6d6d6d;
+}
+.ob-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ob-steps span {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 34, 34, 0.2);
+  font: 600 11px var(--mono);
+}
+.ob-steps li.on {
+  color: var(--ink);
+  font-weight: 500;
+}
+.ob-steps li.on span {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.ob-steps li.done span {
+  background: rgba(34, 34, 34, 0.12);
+}
+
+/* The glass card both steps sit in */
+.ob-card {
+  width: min(100%, 1720px);
+  border: 1px solid var(--glass-line);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  box-shadow:
+    0 2px 4px rgba(50, 28, 39, 0.1),
+    0 40px 80px -40px rgba(50, 28, 39, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  padding: clamp(20px, 3vh, 34px) clamp(20px, 2.6vw, 40px);
+  animation: lp-establish 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.ob-card h1 {
+  margin: 0;
+  font-size: clamp(26px, min(2.6vw, 4.6vh), 40px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.ob-card .ob-intro p,
+.ob-plan__head p {
+  margin: 8px 0 0;
+  max-width: 62ch;
+  color: var(--copy);
+  font-size: clamp(14px, 1.05vw, 16px);
+  line-height: 1.55;
+}
+
+/* Step 1: form */
+.ob-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: clamp(18px, 2.4vw, 40px);
+  margin-top: clamp(16px, 2.6vh, 28px);
+}
+@media (max-width: 900px) {
+  .ob-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.ob-col {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.6vh, 16px);
+}
+.ob-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ob-field > span {
+  font: 600 10.5px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5f5f5f;
+}
+.ob-field input,
+.ob-field textarea {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1px solid rgba(34, 34, 34, 0.14);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  font: 400 15px/1.5 "Inter", sans-serif;
+  resize: vertical;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.ob-field input:focus,
+.ob-field textarea:focus {
+  outline: none;
+  border-color: rgba(173, 49, 77, 0.6);
+  box-shadow: 0 0 0 3px rgba(173, 49, 77, 0.14);
+}
+.ob-linkrow {
+  display: flex;
+  gap: 8px;
+}
+.ob-linkrow .lp-btn {
+  height: auto;
+  flex: 0 0 auto;
+}
+.ob-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ob-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 34, 34, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+  font: 500 12px var(--mono);
+}
+.ob-chip--doc::before {
+  content: "";
+  width: 9px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.ob-chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(34, 34, 34, 0.08);
+  color: var(--ink);
+  cursor: pointer;
+}
+.ob-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: clamp(14px, 2.4vh, 24px);
+  border: 1.5px dashed rgba(34, 34, 34, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.ob-drop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.ob-drop b {
+  font-weight: 500;
+  font-size: 14.5px;
+}
+.ob-drop small {
+  color: var(--copy);
+  font-size: 12.5px;
+}
+.ob-drop.is-over,
+.ob-drop:hover {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.75);
+}
+.ob-submit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+.ob-error {
+  margin: 0;
+  color: #a33a2c;
+  font-size: 13.5px;
+}
+
+/* Step 2–3: plan board */
+.ob-plan__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.ob-plan__actions {
+  display: flex;
+  gap: 10px;
+}
+.ob-plan__actions .lp-btn[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+.ob-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(10px, 1.2vw, 18px);
+  margin-top: clamp(16px, 2.6vh, 28px);
+}
+@media (max-width: 1000px) {
+  .ob-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .ob-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ob-dept {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: clamp(220px, 40vh, 420px);
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 2px 3px rgba(50, 28, 39, 0.22);
+  color: #fff;
+  overflow: hidden;
+}
+.ob-dept::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(255, 255, 255, 0.3), transparent 70%);
+  pointer-events: none;
+}
+.ob-dept--marketing {
+  background: linear-gradient(180deg, #bd4468 0%, #ad355b 38%, #a63b50 72%, #8c1320 100%);
+}
+.ob-dept--customer {
+  background: linear-gradient(164deg, #c9b5e1 0%, #ad80ca 29%, #9d4f72 64%, #793246 100%);
+}
+.ob-dept--finance {
+  background: linear-gradient(177deg, #d84736 0%, #dd523c 24%, #e8703d 52%, #de5641 78%, #d34239 100%);
+}
+.ob-dept--leadership {
+  background: linear-gradient(150deg, #c0436a 0%, #ad314d 55%, #6e1639 100%);
+}
+.ob-dept__head {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  font: 600 10.5px var(--mono);
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.ob-task {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  animation: lp-support 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: opacity 0.2s;
+}
+.ob-task.is-off {
+  opacity: 0.45;
+}
+.ob-task--ghost {
+  height: 104px;
+  animation: ob-shimmer 1.4s ease-in-out infinite;
+}
+.ob-task__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ob-owner {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+.ob-cadence {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(32, 32, 32, 0.78);
+  font: 600 10.5px var(--mono);
+  white-space: nowrap;
+}
+.ob-task h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ob-task p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.84);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ob-keep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.ob-keep input {
+  accent-color: #fff;
+}
+.ob-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #2d2d2d;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.ob-open.is-muted {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+.ob-live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2f7a5b;
+  animation: working 1.4s ease-in-out infinite;
+}
+.ob-empty {
+  position: relative;
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+@keyframes ob-shimmer {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-card,
+  .ob-task,
+  .ob-task--ghost,
+  .ob-live {
+    animation: none;
+  }
+}
