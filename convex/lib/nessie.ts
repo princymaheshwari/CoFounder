@@ -1,12 +1,13 @@
 import type { ActionStatus, GateEffect, LedgerKind } from "./types";
 
-// Pure Nessie helpers (spec 08). Verified live on 2026-10-24 against https://api.nessieisreal.com:
+// Pure Nessie helpers (spec 08). Checked against the official spec (https://prod.nessieisreal.com/docs,
+// nessie-openapi-spec.yaml) and live calls on 2026-10-24:
 // - amounts are whole dollars (the API truncates 35.5 to 35), so we only send whole-dollar cents;
 // - transfers have no payee field (body is {transaction_date, status, amount, description}) and move no
 //   balance, so the receiving account is kept in a `[to:<account>]` tag in the description;
 // - nothing is idempotent, so every object we create carries a `[cf:<key>]` tag and resumes look it up.
 
-export const NESSIE_BASE_URL = "https://api.nessieisreal.com";
+export const NESSIE_BASE_URL = "https://prod-api.nessieisreal.com"; // the production server in the official OpenAPI spec
 
 export type NessieObject = Record<string, unknown>;
 
