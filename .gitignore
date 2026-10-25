@@ -50,3 +50,6 @@ Thumbs.db
 
 # Browser automation snapshots (local)
 .playwright-mcp/
+
+.vercel
+.env*

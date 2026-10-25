@@ -1,0 +1,14 @@
+# Vercel only needs the frontend build inputs (src, convex for the typecheck, configs). Never upload secrets or private docs.
+.env
+.env.*
+!.env.example
+docs
+graphify-out
+.claude
+.playwright-mcp
+frontend_files
+dist
+tests
+scripts
+agents
+skills
