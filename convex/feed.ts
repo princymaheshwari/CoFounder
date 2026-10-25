@@ -95,7 +95,7 @@ const vMessage = v.object({
   senderKind: v.string(),
   sender: v.string(),
   role: v.union(v.string(), v.null()),
-  kind: v.string(), // assign | handoff | repair | nudge | decision | digest | request | note | reply | invalid
+  kind: v.string(), // assign | handoff | repair | nudge | decision | digest | request | note | reply | invalid | posted | radar
   headline: v.string(),
   to: v.union(v.string(), v.null()),
   rules: v.array(v.string()),
@@ -252,6 +252,10 @@ async function messageVM(ctx: QueryCtx, m: Doc<"messages">, names: Map<string, s
       rules: Array.isArray(env?.rules_in_scope) ? (env.rules_in_scope as unknown[]).map(String) : [],
     };
   }
+  // Execution of a post (executor.ts markExecuted): "Posted on <channel> (demo post queue, …): <text>".
+  const posted = /^Posted on (\w+) \(demo post queue[^)]*\): ([\s\S]*)$/.exec(line);
+  if (posted) return { ...common, kind: "posted", to: posted[1], headline: posted[2] };
+  if (line.startsWith("Company Radar (Apify)")) return { ...common, kind: "radar", headline: tidy(line) };
   if (type === "REPAIR" || type === "NUDGE") return { ...common, kind: type.toLowerCase(), headline: tidy(line) };
   if (type === "DECISION") return { ...common, kind: "decision", headline: tidy(txt(env?.note) || line) };
   if (type === "DIGEST") {

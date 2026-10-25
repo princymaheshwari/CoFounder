@@ -9,7 +9,12 @@ import "./onboarding.css";
 // then drops the founder into the workspace (the company's rooms) on #customer.
 
 type Doc = { name: string; excerpt: string };
-type Task = { role: string; room: string; title: string; brief: string; trigger: "interval" | "event"; every_ms?: number; event_type?: string; cadence_label: string };
+type Task = { role: string; room: string; title: string; brief: string; trigger: "interval" | "event"; every_ms?: number; event_type?: string; cadence_label: string; flow?: "linkedin_weekly" };
+
+// How a flow moves through the company, for its plan card.
+const FLOW_STEPS: Record<NonNullable<Task["flow"]>, string[]> = {
+  linkedin_weekly: ["Apify reads LinkedIn", "Market Intel finds trends", "Content drafts", "Posted"],
+};
 type Step = "form" | "planning" | "plan" | "creating";
 
 // The demo company, ready to edit.
@@ -117,7 +122,9 @@ export function Onboarding() {
     setStep("creating");
     try {
       const created = await confirmFn({ input: input(), tasks: tasks.filter((_, i) => !off.has(i)) });
-      const first = created.find((c) => c.room === "#customer") ?? created[0];
+      // Land where the demo continues: the flow's room (#marketing) if there is one, else #customer.
+      const flowRoom = tasks.find((t, i) => t.flow && !off.has(i))?.room;
+      const first = created.find((c) => c.room === flowRoom) ?? created.find((c) => c.room === "#customer") ?? created[0];
       window.location.hash = first ? `#c/${first.roomId}` : "#desk";
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -284,6 +291,16 @@ export function Onboarding() {
                           </div>
                           <h3>{t.title}</h3>
                           <p>{t.brief}</p>
+                          {t.flow ? (
+                            <>
+                              <ol className="ob-flow">
+                                {FLOW_STEPS[t.flow].map((f) => (
+                                  <li key={f}>{f}</li>
+                                ))}
+                              </ol>
+                              <span className="ob-approve">Keeping this approves the weekly post: it publishes without asking you</span>
+                            </>
+                          ) : null}
                           <label className="ob-keep">
                             <input type="checkbox" checked={!skipped} onChange={() => toggle(i)} disabled={step === "creating"} /> Keep
                           </label>

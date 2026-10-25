@@ -85,6 +85,13 @@ async function markExecuted(ctx: MutationCtx, action: Doc<"actions">, refs: stri
     const ticketId = typeof p.ticket_id === "string" ? ctx.db.normalizeId("tickets", p.ticket_id) : null;
     if (ticketId) await ctx.db.patch(ticketId, { status: "handled" });
   }
+  if (action.type === "publish_post" && how === "post queue") {
+    // Read by the app as a "Posted on LinkedIn" card (feed.ts). The post queue is the demo stand-in for publishing.
+    const p = (action.params ?? {}) as Record<string, unknown>;
+    const channel = typeof p.channel === "string" ? p.channel : "unknown";
+    await threadNote(ctx, action, `Posted on ${channel} (demo post queue, ${refs.join(", ")}): ${typeof p.text === "string" ? p.text : ""}`);
+    return;
+  }
   await threadNote(ctx, action, `${action.type} ${action._id} ${how === "executor" ? "executed by the Executor" : `sent to the ${how}`}: ${refs.join(", ")}.`);
 }
 

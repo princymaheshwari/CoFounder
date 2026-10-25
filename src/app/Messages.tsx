@@ -64,6 +64,38 @@ function AssignMessage({ m }: { m: Message }) {
   );
 }
 
+// What the Executor published (post queue), shown as the post itself.
+export function PostedCard({ m }: { m: Message }) {
+  const channel = m.to === "linkedin" ? "LinkedIn" : (m.to ?? "the web");
+  return (
+    <div className="my-2 ml-11 rounded-[14px] border border-white/80 bg-white/85 px-4 py-3.5 shadow-[0_8px_24px_-12px_rgba(50,28,39,0.3)]">
+      <p className="flex items-center gap-2">
+        <span className="grid h-6 w-6 place-items-center rounded-[5px] bg-[#0a66c2] text-[12px] font-bold text-white" aria-hidden>
+          in
+        </span>
+        <span className="font-semibold text-ink">Posted on {channel}</span>
+        <span className="text-[12px] text-faint">{clock(m.at)}</span>
+      </p>
+      <p className="mt-2 whitespace-pre-line text-[14.5px] leading-relaxed text-ink">{m.headline}</p>
+      <p className="mt-2 text-[11.5px] text-faint">Demo post queue · not sent to {channel}</p>
+    </div>
+  );
+}
+
+// Company Radar (Apify) reporting what it read, before the agent it feeds is assigned.
+export function RadarLine({ m }: { m: Message }) {
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border border-ink/15 bg-white/80 font-mono text-[9.5px] font-bold tracking-tight text-ink" aria-hidden>
+        APIFY
+      </span>
+      <p className="min-w-0 flex-1 text-[14px] text-ink-2">
+        {m.headline} <span className="ml-1 text-[12px] text-faint">{clock(m.at)}</span>
+      </p>
+    </div>
+  );
+}
+
 // Any other Dispatcher line inside a thread (repair, nudge, decision, request): small, never a bubble.
 function SystemLine({ m }: { m: Message }) {
   const verb: Record<string, string> = {
@@ -134,6 +166,8 @@ export function AgentReply({ m }: { m: Message }) {
 export function ThreadMessage({ m }: { m: Message }) {
   if (m.senderKind === "agent") return <AgentReply m={m} />;
   if (m.kind === "assign" || m.kind === "handoff") return <AssignMessage m={m} />;
+  if (m.kind === "posted") return <PostedCard m={m} />;
+  if (m.kind === "radar") return <RadarLine m={m} />;
   return <SystemLine m={m} />;
 }
 

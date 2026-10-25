@@ -157,6 +157,7 @@ export const createTaskFromEvent = internalMutation({
 export type ChildResult = { ok: true; taskId: Id<"tasks"> } | { ok: false; reason: HandoffRejection | "no_agent" };
 
 // Creates and assigns a child task for `role` in that role's home channel, if the graph limits allow it.
+// A child in the parent's own channel continues the parent's thread, so one piece of work reads as one thread.
 export async function createChildTask(
   ctx: MutationCtx,
   parent: Doc<"tasks">,
@@ -172,9 +173,10 @@ export async function createChildTask(
   const agent = await agentFor(ctx, child.role);
   if (!agent?.enabled || agent.kind !== "role" || !agent.rooms[0]) return { ok: false, reason: "no_agent" };
 
+  const room = await roomByName(ctx, agent.rooms[0]);
   const taskId = await insertTask(ctx, {
     role: child.role,
-    room: await roomByName(ctx, agent.rooms[0]),
+    room,
     kind: child.kind,
     brief: child.brief,
     parent_task: parent._id,
@@ -183,6 +185,7 @@ export async function createChildTask(
     hop: check.hop,
     origin_refs: [parent._id, ...child.refs.filter((r) => r !== parent._id)],
     mode: parent.mode,
+    ...(room === parent.room ? { thread: parent.thread ?? parent._id } : {}),
   });
   await assign(ctx, taskId, child.handoff ? { handoff: child.handoff } : {});
   return { ok: true, taskId };

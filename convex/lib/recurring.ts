@@ -40,6 +40,12 @@ const taskSchema = z.object({
 });
 export const planSchema = z.object({ tasks: z.array(taskSchema).min(1).max(12) });
 
+// A flow is recurring work that runs through more than one agent and ends in an action. The only one so far:
+// Company Radar (Apify) pulls this week's LinkedIn posts → Market intel finds the trends → HANDOFF to Content →
+// Content drafts the post → the gate allows it under the rule the founder approved at onboarding.
+export const FLOWS = ["linkedin_weekly"] as const;
+export type Flow = (typeof FLOWS)[number];
+
 export type PlanTask = {
   role: RecurringRole;
   room: string;
@@ -49,13 +55,37 @@ export type PlanTask = {
   every_ms?: number;
   event_type?: string;
   cadence_label: string;
+  flow?: Flow;
 };
 
 // Recurring checks only report: no actions and no issues, so a routine run never starts an escalation of its
 // own. Anything that needs a decision goes in the summary, where the manager picks it up.
 export const RECURRING_SUFFIX = "This is a recurring check: reply with one REPORT, with no proposed_actions and no issue. Put anything that needs a decision in the summary for your manager.";
 
-export const recurringBrief = (t: Pick<PlanTask, "cadence_label" | "title" | "brief">) => `Recurring · ${t.cadence_label} · ${t.title}. ${t.brief} ${RECURRING_SUFFIX}`;
+// What a flow's first agent is told to reply with, in place of RECURRING_SUFFIX.
+export const FLOW_SUFFIX: Record<Flow, string> = {
+  linkedin_weekly:
+    `Reply with one HANDOFF to_role "content": summary = the trends in one or two sentences, findings = one per trend with the post's evidence_url, brief = the angle for this week's LinkedIn post about our own product development. The post must not name competitors or mention prices.`,
+};
+
+// The standing rule a flow's approval creates at onboarding: the founder approved the outcome once, so the gate
+// can allow it every week. Same shape as a learned rule; supported by the onboarding decision.
+export const FLOW_RULE = {
+  linkedin_weekly: {
+    scope: { level: "role" as const, role: "content" as const },
+    action_type: "publish_post" as const,
+    conditions: [
+      { field: "channel", op: "in" as const, value: ["linkedin"] },
+      { field: "mentions_pricing", op: "==" as const, value: false },
+      { field: "mentions_competitor", op: "==" as const, value: false },
+    ],
+    effect: "allow" as const,
+    sentence: "Content may publish the weekly LinkedIn post when it mentions no prices and no competitors. Approved at onboarding.",
+  },
+} satisfies Record<Flow, unknown>;
+
+export const recurringBrief = (t: Pick<PlanTask, "cadence_label" | "title" | "brief" | "flow">) =>
+  `Recurring · ${t.cadence_label} · ${t.title}. ${t.brief} ${t.flow ? FLOW_SUFFIX[t.flow] : RECURRING_SUFFIX}`;
 
 export const nextRunAt = (everyMs: number, from: number) => from + everyMs;
 
@@ -63,8 +93,22 @@ export const nextRunAt = (everyMs: number, from: number) => from + everyMs;
 export function parseRecurringBrief(brief: string): { cadence: string; title: string; brief: string } | null {
   const m = /^Recurring · (.+?) · (.+?)\. ([\s\S]*)$/.exec(brief);
   if (!m) return null;
-  return { cadence: m[1], title: m[2], brief: m[3].replace(RECURRING_SUFFIX, "").trim() };
+  let body = m[3].replace(RECURRING_SUFFIX, "");
+  for (const f of FLOWS) body = body.replace(FLOW_SUFFIX[f], "");
+  return { cadence: m[1], title: m[2], brief: body.trim() };
 }
+
+// The weekly LinkedIn post flow (#marketing). Always part of the plan.
+export const LINKEDIN_WEEKLY: PlanTask = {
+  role: "market_intel",
+  room: "#marketing",
+  title: "Weekly LinkedIn post on product updates",
+  brief: "Read this week's LinkedIn posts about AI meeting notes that Company Radar pulled from LinkedIn (co data signals). Pick the two or three trends that matter for our product.",
+  trigger: "interval",
+  every_ms: 7 * 24 * HOUR_MS,
+  cadence_label: "every Monday",
+  flow: "linkedin_weekly",
+};
 
 export const DEFAULT_PLAN: PlanTask[] = [
   {
@@ -94,15 +138,7 @@ export const DEFAULT_PLAN: PlanTask[] = [
     every_ms: 24 * HOUR_MS,
     cadence_label: "daily at 9:00",
   },
-  {
-    role: "market_intel",
-    room: "#marketing",
-    title: "Scan for new trends",
-    brief: "Review new competitor and community signals, including Instagram and LinkedIn trends in AI meeting notes (co data signals). Report up to three findings, each citing its evidence_url.",
-    trigger: "interval",
-    every_ms: 48 * HOUR_MS,
-    cadence_label: "every 2 days",
-  },
+  LINKEDIN_WEEKLY,
   {
     role: "cofounder",
     room: "#leadership",
@@ -134,6 +170,8 @@ export function normalizePlan(raw: unknown): PlanTask[] {
         : { ...base, trigger: "interval", every_ms: Math.round((t.every_hours ?? 24) * HOUR_MS) },
     );
   }
+  // The LinkedIn flow leads #marketing whatever Claude proposed.
+  tasks.unshift(LINKEDIN_WEEKLY);
   for (const room of REQUIRED_ROOMS) {
     if (!tasks.some((t) => t.room === room)) tasks.push(DEFAULT_PLAN.find((t) => t.room === room)!);
   }
@@ -165,6 +203,7 @@ Owners and what they can read:
 - marketing_manager (#marketing): co data signals, co data budget
 - cofounder (#leadership): co data company, co data budget
 Propose 5 to 8 recurring tasks the founder would otherwise do by hand, with at least one owned in each of #customer, #finance and #marketing, plus a weekly memo for the founder owned by cofounder.
+A weekly LinkedIn post flow (market_intel reads this week's LinkedIn trends, content drafts the post) is already planned: do not propose another post-drafting or trend-scanning task.
 Use trigger "event" with event_type "support_ticket" only for work that should happen as soon as a ticket arrives; everything else is "interval" with every_hours.
 cadence_label is a short human label like "as soon as a ticket arrives", "every 2 days", "daily at 9:00", "Mondays".
 Each brief says what to check and what to report, in one or two sentences, using only data the owner can read. Never ask an agent to spend money, post, or contact customers.`;

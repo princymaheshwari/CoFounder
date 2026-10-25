@@ -376,6 +376,7 @@ export default defineSchema({
     event_type: v.optional(v.string()),
     next_run_at: v.optional(v.number()), // interval rows only
     thread: v.id("tasks"), // the first run's task: the thread root every later run writes into
+    flow: v.optional(v.literal("linkedin_weekly")), // multi-agent recurring work (lib/recurring.ts FLOWS)
     runs: v.number(),
     active: v.boolean(),
     created_at: v.number(),

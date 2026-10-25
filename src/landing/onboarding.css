@@ -353,6 +353,30 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.ob-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ob-flow li {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #2d2d2d;
+  font: 600 10.5px var(--mono);
+}
+.ob-flow li + li::before {
+  content: "→ ";
+  color: var(--accent);
+}
+.ob-approve {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
 .ob-keep {
   display: inline-flex;
   align-items: center;
