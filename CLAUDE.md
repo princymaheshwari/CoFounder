@@ -142,7 +142,7 @@ This is the **only** Creao API we use. Known from Creao docs (https://docs.creao
 ## Plan constraints (founder account, Pro Plus)
 
 - **One founder account does everything.** The Dispatcher is code, not a Creao user. The `capi_` account key runs every agent.
-- **Executors.** One Executor per connector is still the safe default (`Executor-Linear` required for `file_bug`, `Executor-Gmail` optional for `reply_customer`); `schedule_digest` is in-app only.
+- **Executor.** One **Executor** agent (input field `action`) holds all connectors; Pro Plus allows several per agent. Linear is required (`file_bug`, end of flow A); Gmail (`reply_customer`) and Google Calendar (`schedule_digest`) are optional, with a mock outbox in the app when not connected.
 - **Schedules.** Standups and the weekly review are started by Convex crons, not Creao schedules.
 - **Credits.** Every run costs credits; the Rate Limiter caps 60 runs/hour/role. Spend is shown from our own `runs` table (no usage API).
 
