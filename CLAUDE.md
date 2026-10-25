@@ -90,6 +90,8 @@ npx convex dev            # run backend, push schema/functions on save
 npm run dev               # frontend
 npx convex run seed:config   # seed agents + channels (rooms) rows from convex/seed.config.ts
 npx convex run health:check  # confirm CREAO_API_KEY reaches the API Trigger
+npx convex run nessie:seedNessie   # seed the Nessie sandbox + customers/ledger_mirror/tickets (idempotent)
+npx convex run nessie:syncLedger   # mirror Nessie into ledger_mirror now (cron runs it every 10 min)
 npm test                  # vitest (convex-test for functions)
 npx convex env set NAME value   # set a backend secret
 ```
@@ -132,8 +134,9 @@ This is the **only** Creao API we use. Known from Creao docs (https://docs.creao
 - Embeddings: `POST /v1/embeddings` (OpenAI shape).
 
 ### Nessie — key as query param `?key=…`
-- Base: `VERIFY` (`http://api.nessieisreal.com` vs `https://prod-api.nessieisreal.com`).
-- Customers `/customers`, accounts `/customers/{id}/accounts`, `/accounts/{id}`, purchases `/accounts/{id}/purchases` (GET/POST), transfers `/accounts/{id}/transfers` (GET/POST), deposits, bills `/accounts/{id}/bills`, merchants `/merchants` (GET/POST). `VERIFY` request bodies in Nessie's interactive docs before writing the seed.
+- Base: `https://api.nessieisreal.com` (verified 2026-10-24; plain `http` times out).
+- Customers `/customers`, accounts `/customers/{id}/accounts`, `/accounts/{id}`, purchases `/accounts/{id}/purchases` (GET/POST), transfers `/accounts/{id}/transfers` (GET/POST), deposits, bills `/accounts/{id}/bills` (GET/POST), `PUT /bills/{id}`, merchants `/merchants` (GET/POST). Verified request bodies are in spec 08's "Decisions made while building".
+- Verified quirks: transfers have **no payee** (body `{transaction_date, status, amount, description}`) and move no balance; amounts are **whole dollars** (decimals truncated); nothing is idempotent (we tag objects `[cf:<key>]` in description/nickname); a wrong key returns `200 []`.
 
 ### Apify — base `https://api.apify.com/v2`, `Authorization: Bearer <token>`
 - Webhook events `ACTOR.RUN.SUCCEEDED` etc.; custom `payloadTemplate` with `{{resource}}` variables. Dataset items: `GET /v2/datasets/{datasetId}/items`.

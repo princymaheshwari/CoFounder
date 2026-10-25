@@ -26,12 +26,16 @@ import type * as lib_catalog from "../lib/catalog.js";
 import type * as lib_co from "../lib/co.js";
 import type * as lib_envelope from "../lib/envelope.js";
 import type * as lib_gate from "../lib/gate.js";
+import type * as lib_nessie from "../lib/nessie.js";
 import type * as lib_routing from "../lib/routing.js";
 import type * as lib_rules from "../lib/rules.js";
 import type * as lib_time from "../lib/time.js";
 import type * as lib_tokens from "../lib/tokens.js";
 import type * as lib_types from "../lib/types.js";
+import type * as nessie from "../nessie.js";
+import type * as nessieApi from "../nessieApi.js";
 import type * as seed from "../seed.js";
+import type * as seedData from "../seedData.js";
 import type * as tasks from "../tasks.js";
 
 import type {
@@ -59,12 +63,16 @@ declare const fullApi: ApiFromModules<{
   "lib/co": typeof lib_co;
   "lib/envelope": typeof lib_envelope;
   "lib/gate": typeof lib_gate;
+  "lib/nessie": typeof lib_nessie;
   "lib/routing": typeof lib_routing;
   "lib/rules": typeof lib_rules;
   "lib/time": typeof lib_time;
   "lib/tokens": typeof lib_tokens;
   "lib/types": typeof lib_types;
+  nessie: typeof nessie;
+  nessieApi: typeof nessieApi;
   seed: typeof seed;
+  seedData: typeof seedData;
   tasks: typeof tasks;
 }>;
 

@@ -3,7 +3,8 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { env, internalAction, internalMutation } from "./_generated/server";
 import { TOKEN_TTL_MS, hashToken, signTaskToken } from "./lib/tokens";
-import { vRole, vTaskStatus } from "./lib/types";
+import { gateAction } from "./gate";
+import { vActionType, vRole, vTaskStatus } from "./lib/types";
 import { taskFromEvent } from "./tasks";
 
 // Dev helper: a seeded support_ticket event, routed by spec 05 (→ Support task in #customer → ASSIGN).
@@ -103,7 +104,46 @@ export const dropCoSmokeTask = internalMutation({
   handler: async (ctx, { taskId }) => {
     const task = await ctx.db.get(taskId);
     if (task?.brief !== SMOKE_BRIEF) throw new Error(`${taskId} is not a co smoke-test task`);
+    // Also drop what dev:proposeAction hung off it: actions, their inbox items, and thread messages.
+    for (const action of await ctx.db.query("actions").withIndex("by_task", (q) => q.eq("task", taskId)).take(100)) {
+      for (const item of await ctx.db.query("founder_inbox").withIndex("by_status", (q) => q.eq("status", "open")).take(500)) {
+        if (item.ref === action._id) await ctx.db.delete(item._id);
+      }
+      await ctx.db.delete(action._id);
+    }
+    for (const m of await ctx.db.query("messages").withIndex("by_task", (q) => q.eq("task", taskId)).take(500)) await ctx.db.delete(m._id);
     await ctx.db.delete(taskId);
     return null;
+  },
+});
+
+// Dev helper (spec 08): propose an action on a task and run it through the real gate, e.g.
+//   npx convex run dev:proposeAction '{"taskId":"…","type":"refund","params":{"customer_id":"…","amount_cents":3500},
+//     "labels":{"refund_reason":{"value":"billing_error","confidence":0.95}}}'
+// `labels` stands in for Jev until spec 11. An allowed Nessie action is executed by the scheduled executeMoneyAction.
+export const proposeAction = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    type: vActionType,
+    params: v.any(),
+    labels: v.optional(v.record(v.string(), v.object({ value: v.union(v.string(), v.boolean(), v.number()), confidence: v.number() }))),
+  },
+  returns: v.object({ actionId: v.id("actions"), effect: v.union(v.string(), v.null()), reason: v.union(v.string(), v.null()) }),
+  handler: async (ctx, { taskId, type, params, labels }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new Error(`task ${taskId} not found`);
+    const actionId = await ctx.db.insert("actions", {
+      task: taskId,
+      chain_id: task.chain_id,
+      role: task.role,
+      type,
+      params,
+      rationale: "[dev] proposed by hand",
+      ...(labels ? { labels } : {}),
+      status: "proposed",
+      created_at: Date.now(),
+    });
+    const outcome = await gateAction(ctx, actionId);
+    return { actionId, effect: outcome?.effect ?? null, reason: outcome?.reason ?? null };
   },
 });
