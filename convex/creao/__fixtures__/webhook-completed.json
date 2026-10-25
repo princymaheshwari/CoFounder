@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "X-Creao-Delivery-Id": "b3f29a0f-5819-5985-8c89-670d316f6d3b"
+  },
+  "body": {
+    "result": {
+      "artifacts": [],
+      "chatText": "The transport test worked, and I made no tool calls to answer it.\n\n```cofounder\n{\"type\": \"REPORT\", \"task\": \"t_verify_1792895078195\", \"from\": \"support\", \"summary\": \"Transport test succeeded.\", \"findings\": [{\"claim\": \"transport ok\", \"evidence\": \"test\"}]}\n```",
+      "text": "{\"message\":\"Transport ok.\",\"task_id\":\"t_verify_1792895078195\",\"envelope_type\":\"REPORT\",\"ticket_id\":\"none\",\"customer_id\":\"none\",\"refund_amount_cents\":0,\"issue_raised\":\"none\",\"status\":\"success\",\"summary\":\"Transport test replied with REPORT, no actions.\"}"
+    },
+    "runId": "3be1cd01-f74b-4ff6-aeb0-8a1e6fc4bff5",
+    "status": "completed",
+    "threadId": "c9848713-4a5b-4bbe-812e-edc8bbeae60a"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "completedAt": "2026-10-25T02:25:16.208Z",
+  "createdAt": "2026-10-25T02:25:03.148Z",
+  "errorCode": null,
+  "id": "e33705be-9c86-45d4-9047-f4f8a7db8e62",
+  "result": {
+    "chatText": "The task id you gave me is t_verify_1792895078195.\n\n```cofounder\n{\"type\": \"REPORT\", \"task\": \"t_verify_1792895078195\", \"from\": \"support\", \"summary\": \"Task id is t_verify_1792895078195.\", \"findings\": [{\"claim\": \"transport ok\", \"evidence\": \"test\"}]}\n```",
+    "text": "{\"message\":\"Task id answered: t_verify_1792895078195\",\"task_id\":\"t_verify_1792895078195\",\"envelope_type\":\"REPORT\",\"ticket_id\":\"none\",\"customer_id\":\"none\",\"refund_amount_cents\":0,\"issue_raised\":\"none\",\"status\":\"success\",\"summary\":\"Follow-up: stated task id; REPORT with no actions.\"}"
+  },
+  "startedAt": "2026-10-25T02:25:03.164Z",
+  "status": "completed",
+  "threadId": "c9848713-4a5b-4bbe-812e-edc8bbeae60a"
+}

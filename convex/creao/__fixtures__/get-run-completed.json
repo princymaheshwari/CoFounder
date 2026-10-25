@@ -1,0 +1,13 @@
+{
+  "completedAt": "2026-10-25T02:24:58.870Z",
+  "createdAt": "2026-10-25T02:24:38.414Z",
+  "errorCode": null,
+  "id": "3be1cd01-f74b-4ff6-aeb0-8a1e6fc4bff5",
+  "result": {
+    "chatText": "The transport test worked, and I made no tool calls to answer it.\n\n```cofounder\n{\"type\": \"REPORT\", \"task\": \"t_verify_1792895078195\", \"from\": \"support\", \"summary\": \"Transport test succeeded.\", \"findings\": [{\"claim\": \"transport ok\", \"evidence\": \"test\"}]}\n```",
+    "text": "{\"message\":\"Transport ok.\",\"task_id\":\"t_verify_1792895078195\",\"envelope_type\":\"REPORT\",\"ticket_id\":\"none\",\"customer_id\":\"none\",\"refund_amount_cents\":0,\"issue_raised\":\"none\",\"status\":\"success\",\"summary\":\"Transport test replied with REPORT, no actions.\"}"
+  },
+  "startedAt": "2026-10-25T02:24:38.424Z",
+  "status": "completed",
+  "threadId": "c9848713-4a5b-4bbe-812e-edc8bbeae60a"
+}
