@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { appendMessage, audit, getConfig } from "./channels";
@@ -163,8 +164,10 @@ export async function gateAction(ctx: MutationCtx, actionId: Id<"actions">): Pro
 
   switch (result.effect) {
     case "allow":
-      // Spec 08 (Nessie) and spec 10 (Executor, post queue) execute `allowed` actions.
+      // Spec 08 executes Nessie actions (scheduled here, so only a committed allow starts one);
+      // spec 10 (Executor, post queue) picks up the rest.
       await audit(ctx, { actor: "gate", kind: "execution_pending", ref: task._id, detail: { actionId, executor: entry.executor } });
+      if (entry.executor === "nessie") await ctx.scheduler.runAfter(0, internal.nessie.executeMoneyAction, { actionId });
       break;
     case "escalate": {
       const lines = [
