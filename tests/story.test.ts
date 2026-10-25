@@ -223,12 +223,20 @@ describe("story mode", () => {
     expect(refunds()).toHaveLength(15); // Support's refund + 2 batch items (its own customer skipped)
     expect(elsewhere).toEqual([]);
 
-    // After a reset the same seeded customers can be refunded again (the guard ignores wiped actions).
+    // A reset deletes the rehearsal refunds from Nessie and the mirror; seeded transfers stay.
+    const seededTransfers = nessie.transfers.length - refunds().length;
     await t.mutation(api.story.reset, {});
+    await drain(t);
+    expect(refunds()).toHaveLength(0);
+    expect(nessie.transfers).toHaveLength(seededTransfers);
+    const mirrored = await t.run((ctx) => ctx.db.query("ledger_mirror").collect());
+    expect(mirrored.filter((r) => /\[cf:act-/.test(String((r.raw as { description?: string } | null)?.description)))).toEqual([]);
+
+    // The same seeded customers can be refunded again.
     await t.mutation(api.story.start, { act: "double_charge" });
     await drain(t);
     expect((await actionsOf("refund"))[0]).toMatchObject({ status: "executed" });
-    expect(refunds()).toHaveLength(16);
+    expect(refunds()).toHaveLength(1);
   });
 
   test("demo tools are off unless DEMO_TOOLS=on", async () => {

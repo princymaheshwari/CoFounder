@@ -116,6 +116,6 @@ export const lastMove = query({
   returns: v.number(),
   handler: async (ctx) => {
     const rows = await ctx.db.query("audit_log").withIndex("by_at").order("desc").take(100);
-    return rows.find((r) => r.actor === "nessie" && (r.kind === "executed" || r.kind === "executed_item"))?.at ?? 0;
+    return rows.find((r) => r.actor === "nessie" && (r.kind === "executed" || r.kind === "executed_item" || r.kind === "demo_refunds_deleted"))?.at ?? 0;
   },
 });

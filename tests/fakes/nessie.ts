@@ -67,6 +67,17 @@ export class FakeNessie {
       this.transfers.push({ ...o, _payer: parts[1] });
       return this.created(o);
     }
+    // Verified 2026-10-25: GET returns `id`; DELETE answers 200, after which GET is 404 "Transfer not found".
+    if (parts[0] === "transfers" && parts.length === 2) {
+      const i = this.transfers.findIndex((t) => t._id === parts[1]);
+      if (i < 0) return this.ok("Transfer not found", 404);
+      if (method === "DELETE") {
+        this.transfers.splice(i, 1);
+        return new Response(null, { status: 200 });
+      }
+      const { _payer, _id, ...t } = this.transfers[i];
+      return this.ok({ id: _id, ...t });
+    }
     if (parts[0] === "accounts" && parts[2] === "purchases") {
       if (method === "GET") return this.ok(this.purchases.filter((p) => p.payer_id === parts[1]));
       const o = { ...body, amount: dollars(body.amount), _id: this.id(), type: "merchant", payer_id: parts[1] };

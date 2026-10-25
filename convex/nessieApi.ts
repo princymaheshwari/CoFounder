@@ -16,7 +16,7 @@ export class NessieError extends Error {
   }
 }
 
-type Method = "GET" | "POST" | "PUT";
+type Method = "GET" | "POST" | "PUT" | "DELETE";
 
 async function nessieFetch(method: Method, path: string, body?: unknown): Promise<{ status: number; json: unknown }> {
   const key = env.NESSIE_API_KEY;
@@ -78,6 +78,17 @@ export async function nessieCreate(path: string, body: Record<string, unknown>):
   const created = json && typeof json === "object" && "objectCreated" in json ? (json.objectCreated as unknown) : null;
   if (!created || typeof created !== "object") throw new NessieError(0, `create returned no object: ${String(json).slice(0, 200)}`);
   return created as NessieObject;
+}
+
+// DELETE /transfers/{id} → 200, then GET answers 404 "Transfer not found" (verified 2026-10-25).
+// A 404 means it is already gone, so a repeated delete is not an error.
+export async function nessieDelete(path: string): Promise<void> {
+  try {
+    await nessieFetch("DELETE", path);
+  } catch (err) {
+    if (err instanceof NessieError && err.status === 404) return;
+    throw err;
+  }
 }
 
 // PUT → 202 {code, message, objectUpdated: {…}}.

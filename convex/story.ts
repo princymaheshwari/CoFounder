@@ -400,13 +400,15 @@ export async function resetDemo(ctx: MutationCtx): Promise<Record<string, number
   for (const c of await ctx.db.query("config").take(500)) if (c.key.startsWith("induction_pending")) await ctx.db.delete(c._id);
   for (const r of await ctx.db.query("rooms").take(50)) await ctx.db.patch(r._id, { next_seq: 1 });
   for (const f of await ctx.db.query("founder").take(10)) await ctx.db.patch(f._id, { status: "present", updated_at: Date.now() });
-  // Refunds already in Nessie stay there; the double-refund guard stops counting the ones whose actions were just wiped.
+  // The double-refund guard stops counting refunds whose actions were just wiped.
   const stamp = await ctx.db
     .query("config")
     .withIndex("by_key", (q) => q.eq("key", DEMO_RESET_KEY))
     .unique();
   if (stamp) await ctx.db.patch(stamp._id, { value: Date.now() });
   else await ctx.db.insert("config", { key: DEMO_RESET_KEY, value: Date.now() });
+  // Then delete those rehearsal refunds from Nessie and the mirror, so agents never read them (runs after this commits).
+  await ctx.scheduler.runAfter(0, internal.nessie.cleanupDemoRefunds, {});
   await seedRules(ctx);
   return counts;
 }

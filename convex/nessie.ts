@@ -23,7 +23,7 @@ import {
 import { currentBudget } from "./gate";
 import { DAY_MS } from "./lib/co";
 import { vLedgerKind } from "./lib/types";
-import { nessieCreate, nessieGet, nessieList, nessieUpdate } from "./nessieApi";
+import { nessieCreate, nessieDelete, nessieGet, nessieList, nessieUpdate } from "./nessieApi";
 import { ADDRESS, CUSTOMER_ACCOUNT, MERCHANTS, OPERATING, buildSeedPlan, type SeedItem } from "./seedData";
 
 // Spec 08: the Lumen Notes sandbox bank. Seed, ledger mirror sync, and money-action execution.
@@ -553,6 +553,82 @@ export async function priorRefund(ctx: MutationCtx, toAccount: string, since: st
 }
 
 export const refundGuardSince = (now: number) => new Date(now - REFUND_GUARD_DAYS * DAY_MS).toISOString();
+
+// ---------------------------------------------------------------- demo reset cleanup
+
+const actionOfMarker = (marker: string | undefined) => /^act-(.+)-\d+$/.exec(marker ?? "")?.[1];
+
+// Of these action ids (from `[cf:act-…]` tags), the ones that no longer exist: a demo reset wiped them.
+export const wipedActions = internalQuery({
+  args: { actionIds: v.array(v.string()) },
+  returns: v.array(v.string()),
+  handler: async (ctx, { actionIds }) => {
+    const out: string[] = [];
+    for (const raw of actionIds) {
+      const id = ctx.db.normalizeId("actions", raw);
+      if (id && !(await ctx.db.get(id))) out.push(raw);
+    }
+    return out;
+  },
+});
+
+// Drops the mirror rows of deleted refunds, plus any other operating-account refund whose action was wiped.
+export const dropWipedRefunds = internalMutation({
+  args: { deleted: v.array(v.string()), failed: v.number() },
+  returns: v.number(),
+  handler: async (ctx, { deleted, failed }) => {
+    const state = await getConfig<NessieState | null>(ctx, STATE_KEY, null);
+    const gone = new Set(deleted);
+    let dropped = 0;
+    const rows = await ctx.db
+      .query("ledger_mirror")
+      .withIndex("by_kind", (q) => q.eq("kind", "transfer"))
+      .take(5000);
+    for (const r of rows) {
+      const action = state && r.account_id === state.operating_account_id ? actionOfMarker(markerOf(r.raw as NessieObject)) : undefined;
+      const actionId = action ? ctx.db.normalizeId("actions", action) : null;
+      const wiped = actionId !== null && !(await ctx.db.get(actionId));
+      if (gone.has(r.nessie_id) || wiped) {
+        await ctx.db.delete(r._id);
+        dropped++;
+      }
+    }
+    await audit(ctx, { actor: "nessie", kind: "demo_refunds_deleted", ref: "demo_reset", detail: { deleted: deleted.length, failed, mirror_rows: dropped } });
+    return dropped;
+  },
+});
+
+// After a demo reset (DEMO_TOOLS only): deletes from Nessie every refund whose action the reset wiped, so live
+// agents reading the ledger never see rehearsal refunds. Only `[cf:act-…]` transfers we created are touched.
+export const cleanupDemoRefunds = internalAction({
+  args: {},
+  returns: v.object({ deleted: v.number(), failed: v.number(), mirror_rows: v.number() }),
+  handler: async (ctx) => {
+    if (env.DEMO_TOOLS !== "on") return { deleted: 0, failed: 0, mirror_rows: 0 };
+    const state: NessieState | null = await ctx.runQuery(internal.nessie.getState, {});
+    if (!state) return { deleted: 0, failed: 0, mirror_rows: 0 };
+    const ours = (await nessieList(`/accounts/${state.operating_account_id}/transfers`))
+      .map((o) => ({ id: nessieId(o), action: actionOfMarker(markerOf(o)) }))
+      .filter((t): t is { id: string; action: string } => t.action !== undefined);
+    const wiped = new Set<string>(await ctx.runQuery(internal.nessie.wipedActions, { actionIds: [...new Set(ours.map((t) => t.action))] }));
+    const deleted: string[] = [];
+    let failed = 0;
+    await pool(
+      ours.filter((t) => wiped.has(t.action)),
+      5,
+      async (t) => {
+        try {
+          await nessieDelete(`/transfers/${t.id}`);
+          deleted.push(t.id);
+        } catch {
+          failed++;
+        }
+      },
+    );
+    const mirror_rows: number = await ctx.runMutation(internal.nessie.dropWipedRefunds, { deleted, failed });
+    return { deleted: deleted.length, failed, mirror_rows };
+  },
+});
 
 // The gate (on allow) or the founder's approval debited the action's full amount; items the guard skips are
 // never paid, so their amount goes back to the current budget period. Each marker is credited once (resumes re-skip).
