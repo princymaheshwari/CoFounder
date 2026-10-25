@@ -112,12 +112,19 @@ export function evaluate(input: GateInput): GateResult {
   if (entry.money && amount !== undefined && amount > config.money_hard_cap_cents) return escalate("hard:cap");
   if (entry.money && budget && amount !== undefined && amount + budget.spent_cents > budget.limit_cents) return escalate("hard:budget");
 
-  // 2. Labels (spec 11): a Jev failure, a required label that is missing, or one below the confidence floor.
+  // 2. Labels (spec 11): a Jev failure, a required label that is missing, or a label the decision depends on
+  // (required for the type, or read by an applicable rule) below the confidence floor. An unsure answer to an
+  // optional question no rule reads (e.g. `grounded`) does not block.
   const labels = action.labels ?? {};
+  const required = requiredLabels(action.type);
+  const relied = new Set([
+    ...required,
+    ...input.rules.filter((r) => r.status === "active" && r.action_type === action.type && scopeMatches(r, action)).flatMap((r) => r.conditions.map((c) => c.field)),
+  ]);
   if (
     action.label_error ||
-    requiredLabels(action.type).some((name) => !(name in labels)) ||
-    Object.values(labels).some((l) => l.confidence < config.confidence_min)
+    required.some((name) => !(name in labels)) ||
+    Object.entries(labels).some(([name, l]) => relied.has(name) && l.confidence < config.confidence_min)
   ) {
     return escalate("labels:low_confidence");
   }

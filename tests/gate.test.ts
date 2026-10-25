@@ -60,6 +60,17 @@ function rule(id: string, extra: Partial<GateRule>): GateRule {
   return { id, scope: { level: "company" }, action_type: "refund", conditions: [], effect: "allow", status: "active", support: 5, ...extra };
 }
 
+// The weekly LinkedIn rule approved at onboarding (lib/recurring.ts FLOW_RULE).
+const linkedinRule = rule("li", {
+  scope: { level: "role", role: "content" },
+  action_type: "publish_post",
+  conditions: [
+    { field: "channel", op: "in", value: ["linkedin"] },
+    { field: "mentions_pricing", op: "==", value: false },
+    { field: "mentions_competitor", op: "==", value: false },
+  ],
+});
+
 function input(a: GateAction, over: Partial<GateInput> = {}): GateInput {
   return {
     action: a,
@@ -95,6 +106,45 @@ const CASES: Case[] = [
   ["a required label that is missing escalates", input(action("reply_customer"), { rules: [rule("rc", { action_type: "reply_customer" })] }), { effect: "escalate", reason: "labels:low_confidence" }],
   ["a refund without refund_reason escalates", input(refund(3500, { labels: undefined })), { effect: "escalate", reason: "labels:low_confidence" }],
   ["reply_customer with its label passes", input(action("reply_customer", { labels: noCommitment }), { rules: [rule("rc", { action_type: "reply_customer" })] }), { effect: "allow", rule_id: "rc", debits: [] }],
+  [
+    "an unsure optional label no rule reads does not block (the weekly LinkedIn post)",
+    input(
+      action("publish_post", {
+        role: "content",
+        department: "marketing",
+        params: { channel: "linkedin", text: "We shipped offline mode." },
+        labels: { mentions_pricing: { value: false, confidence: 0.98 }, mentions_competitor: { value: false, confidence: 0.97 }, grounded: { value: true, confidence: 0.59 } },
+      }),
+      { rules: [linkedinRule] },
+    ),
+    { effect: "allow", rule_id: "li", debits: [] },
+  ],
+  [
+    "an unsure label that an applicable rule reads still escalates",
+    input(
+      action("publish_post", {
+        role: "content",
+        department: "marketing",
+        params: { channel: "linkedin", text: "We shipped offline mode." },
+        labels: { mentions_pricing: { value: false, confidence: 0.98 }, mentions_competitor: { value: false, confidence: 0.97 }, grounded: { value: true, confidence: 0.59 } },
+      }),
+      { rules: [{ ...linkedinRule, conditions: [...linkedinRule.conditions, { field: "grounded", op: "==", value: true }] }] },
+    ),
+    { effect: "escalate", reason: "labels:low_confidence" },
+  ],
+  [
+    "an unsure required label escalates even when no rule reads it",
+    input(
+      action("publish_post", {
+        role: "content",
+        department: "marketing",
+        params: { channel: "linkedin", text: "We shipped offline mode." },
+        labels: { mentions_pricing: { value: false, confidence: 0.6 }, mentions_competitor: { value: false, confidence: 0.97 } },
+      }),
+      { rules: [rule("any", { action_type: "publish_post", scope: { level: "role", role: "content" } })] },
+    ),
+    { effect: "escalate", reason: "labels:low_confidence" },
+  ],
   // 3. Novelty
   ["an action type the founder never approved escalates", input(refund(3500), { stats: { approvedCount: 0, maxApprovedCents: 0, counterparties: [] } }), { effect: "escalate", reason: "novelty:new_type" }],
   ["a bill from an unseen merchant escalates", input(action("pay_bill", { amount_cents: 1000, counterparty: "NewVendor" }), { rules: [rule("pb", { action_type: "pay_bill" })] }), { effect: "escalate", reason: "novelty:new_counterparty" }],
