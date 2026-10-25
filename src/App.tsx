@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ChannelView } from "./app/ChannelView";
+import { Landing } from "./landing/Landing";
 import { Desk } from "./app/Desk";
 import { Rulebook } from "./app/Rulebook";
 import { Sidebar, type View } from "./app/Sidebar";
@@ -13,6 +14,9 @@ import { RosterProvider } from "./app/ui";
 // The view lives in the URL hash (#desk, #rules, #c/<room>, plus /t/<thread>) so a refresh keeps your place.
 
 type Place = { view: View; thread: Id<"tasks"> | null };
+
+// The landing page lives at the bare URL and at #home.
+const isLanding = (hash: string) => hash === "" || hash === "#" || hash === "#home";
 
 // #desk · #desk/<thread> · #rules · #c/<room> · #c/<room>/t/<thread>
 function parse(hash: string): Place {
@@ -30,8 +34,12 @@ function format(p: Place): string {
 export default function App() {
   const overview = useQuery(api.feed.overview);
   const [place, setPlace] = useState<Place>(() => parse(window.location.hash));
+  const [landing, setLanding] = useState(() => isLanding(window.location.hash));
   useEffect(() => {
-    const onHash = () => setPlace(parse(window.location.hash));
+    const onHash = () => {
+      setPlace(parse(window.location.hash));
+      setLanding(isLanding(window.location.hash));
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -40,6 +48,7 @@ export default function App() {
     setPlace(p);
   }, []);
 
+  if (landing) return <Landing />;
   if (overview === undefined) {
     return <main className="grid h-full place-items-center text-muted">Connecting to the company…</main>;
   }
