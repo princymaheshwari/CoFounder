@@ -65,6 +65,12 @@
   text-align: center;
   width: min(100%, 980px);
 }
+.lp-hero__name,
+.lp-hero__pitch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
 .lp-title {
   margin: 0;
@@ -695,6 +701,129 @@
   100% {
     opacity: 0;
     scale: 1.12;
+  }
+}
+
+/* ---------- Laptop and wider: spread out to fill one landscape screen ----------
+   The masthead becomes a row (name left, pitch right), the diagram takes the rest of the viewport height,
+   and the story narration moves into a column beside the diagram instead of under it. */
+
+@media (min-width: 1100px) {
+  .lp {
+    --content-max: 1720px;
+    height: 100svh;
+    min-height: 640px;
+    padding: clamp(20px, 4vh, 48px) var(--gutter) clamp(16px, 3vh, 36px);
+  }
+
+  .lp-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, clamp(340px, 34vw, 560px));
+    align-items: end;
+    gap: clamp(24px, 4vw, 72px);
+    width: min(100%, var(--content-max));
+    text-align: left;
+  }
+  .lp-hero__name,
+  .lp-hero__pitch {
+    align-items: flex-start;
+  }
+  .lp-title {
+    font-size: clamp(64px, min(9.6vw, 13.5vh), 168px);
+  }
+  .lp-slogan {
+    justify-content: flex-start;
+  }
+  .lp-intro {
+    margin: 0;
+    max-width: none;
+    font-size: clamp(14.5px, min(1.12vw, 2.3vh), 18px);
+  }
+  .lp-cta {
+    justify-content: flex-start;
+  }
+
+  .lp-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: flex-start;
+    container-type: size;
+    margin-top: clamp(14px, 2.8vh, 32px);
+  }
+
+  .lp-org {
+    /* Edge to edge with the masthead. The diagram (1100×515 plus 6px padding) is as tall as the stage allows;
+       the narration column takes whatever width is left, never less than 270px. */
+    width: min(100cqw, var(--content-max));
+    max-height: 100cqh;
+    display: grid;
+    grid-template-columns: min(calc((100cqh - 8px) * 2.125), calc(min(100cqw, var(--content-max)) - 270px)) minmax(270px, 1fr);
+  }
+  .lp-org__scroll {
+    align-self: center;
+    overflow: visible;
+  }
+  .lp-svg {
+    min-width: 0;
+    padding: 6px;
+  }
+
+  .lp-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    min-height: 0;
+    padding: 20px 20px 18px;
+    border-top: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.55);
+    overflow-y: auto;
+    contain: size; /* the column takes the diagram's height instead of stretching it */
+  }
+  .lp-narr p {
+    margin-top: 10px;
+    font-size: clamp(14px, 1.05vw, 16px);
+    line-height: 1.55;
+  }
+  .lp-narr__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .lp-progress i {
+    width: 14px;
+  }
+  .lp-count {
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px 22px;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid rgba(34, 34, 34, 0.1);
+  }
+  .lp-count > div:not(.lp-ctrls) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .lp-count b {
+    font-size: clamp(28px, 2.4vw, 40px);
+    line-height: 1;
+  }
+  .lp-ctrls {
+    margin-left: auto;
+  }
+  .lp-detail {
+    position: relative;
+    padding-right: 40px;
+  }
+  .lp-detail__head .lp-iconbtn {
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
+  .lp-detail p {
+    font-size: 14px;
   }
 }
 
