@@ -53,16 +53,16 @@ export default function App() {
   if (page === "home") return <Landing />;
   if (page === "start") return <Onboarding />;
   if (overview === undefined) {
-    return <main className="grid h-full place-items-center text-muted">Connecting to the company…</main>;
+    return <main className="grid h-full place-items-center text-muted">Opening your workspace…</main>;
   }
   const desk = overview.channels.find((c) => c.name === "#founder-desk");
   const open = (thread: Id<"tasks">) => navigate({ view: place.view, thread });
 
   return (
     <RosterProvider agents={overview.agents}>
-      <div className="flex h-full min-w-[1100px]">
+      <div className="flex h-full min-w-[1100px] gap-3 p-3">
         <Sidebar overview={overview} view={place.view} go={(view) => navigate({ view, thread: null })} />
-        <main className="flex min-w-0 flex-1">
+        <main className="glass flex min-w-0 flex-1 overflow-hidden rounded-[17px]">
           {place.view.kind === "channel" ? (
             <ChannelView roomId={place.view.roomId} overview={overview} onOpen={open} selected={place.thread} />
           ) : place.view.kind === "rules" ? (

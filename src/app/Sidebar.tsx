@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { plural } from "../lib/format";
-import type { Overview } from "./ui";
+import { DEPT_GRAD, ROOM_DEPT, type Overview } from "./ui";
 
 export type View = { kind: "desk" } | { kind: "channel"; roomId: Id<"rooms"> } | { kind: "rules" };
 
@@ -12,7 +12,7 @@ function NavItem({ active, onClick, children, badge }: { active: boolean; onClic
     <button
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-1.5 text-left text-[15px] ${active ? "bg-ink font-semibold text-paper" : "text-ink-2 hover:bg-sunk"}`}
+      className={`flex w-full items-center justify-between gap-2 rounded-full px-3.5 py-1.5 text-left text-[15px] transition-colors ${active ? "bg-ink font-medium text-white" : "text-ink-2 hover:bg-white/60"}`}
     >
       <span className="min-w-0 truncate">{children}</span>
       {badge}
@@ -26,7 +26,7 @@ function Tape({ tally }: { tally: Overview["tally"] }) {
   const total = tally.byRules + tally.byFounder;
   return (
     <section aria-labelledby="tape-title">
-      <h2 id="tape-title" className="text-[13px] font-semibold text-ink">
+      <h2 id="tape-title" className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.09em] text-muted">
         Who decided
       </h2>
       <div className="mt-2 flex min-h-[14px] flex-wrap gap-[3px]" role="img" aria-label={`${tally.byRules} decided by rules, ${tally.byFounder} by you, ${tally.waiting} waiting`}>
@@ -82,7 +82,7 @@ function Story() {
   }
   return (
     <section aria-labelledby="story-title">
-      <h2 id="story-title" className="text-[13px] font-semibold text-ink">
+      <h2 id="story-title" className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.09em] text-muted">
         Demo story
       </h2>
       <ol className="mt-2 space-y-2">
@@ -90,7 +90,7 @@ function Story() {
           const done = status?.started.includes(a.act);
           const next = ACTS.find((x) => !status?.started.includes(x.act))?.act === a.act;
           return (
-            <li key={a.act} className="rounded-md border border-line bg-surface px-3 py-2">
+            <li key={a.act} className="rounded-[12px] border border-white/70 bg-white/55 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="min-w-0 text-[13px] font-semibold leading-snug text-ink">
                   <span className="mr-1.5 text-faint">{i + 1}</span>
@@ -99,7 +99,7 @@ function Story() {
                 <button
                   onClick={() => void run(a.act, () => start({ act: a.act }))}
                   disabled={busy !== null}
-                  className={`shrink-0 rounded px-2 py-0.5 text-[12px] font-semibold ${done ? "text-muted hover:bg-sunk" : "bg-ink text-paper hover:bg-ink-2"} disabled:opacity-50`}
+                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${done ? "text-muted hover:bg-white/70" : "bg-ink text-white hover:bg-ink-2"} disabled:opacity-50`}
                 >
                   {busy === a.act ? "Starting…" : done ? "Run again" : "Run"}
                 </button>
@@ -138,10 +138,13 @@ export function Sidebar({ overview, view, go }: { overview: Overview; view: View
   const active = (rules?.rules ?? []).filter((r) => r.status === "active").length;
   const working = new Set(overview.agents.filter((a) => a.state === "working").flatMap((a) => a.rooms));
   return (
-    <nav className="scroll-quiet flex w-[288px] shrink-0 flex-col gap-6 overflow-y-auto border-r border-line bg-paper px-4 pb-5 pt-6" aria-label="Company">
+    <nav className="glass scroll-quiet flex w-[288px] shrink-0 flex-col gap-6 overflow-y-auto rounded-[17px] px-4 pb-5 pt-6" aria-label="Company">
       <div className="px-3">
-        <p className="text-[19px] font-extrabold leading-tight tracking-[-0.02em] text-ink">{overview.company.name}</p>
-        <p className="mt-1 text-[13px] leading-snug text-muted">
+        <a href="#home" className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.09em] text-muted hover:text-ink">
+          CoFounder workspace
+        </a>
+        <p className="mt-1.5 text-[28px] font-medium leading-[1.05] tracking-[-0.045em] text-ink">{overview.company.name}</p>
+        <p className="mt-2 text-[13px] leading-snug text-muted">
           {plural(overview.agents.length, "agent")} run the company. You decide only what they can't.
         </p>
       </div>
@@ -150,17 +153,17 @@ export function Sidebar({ overview, view, go }: { overview: Overview; view: View
         <NavItem
           active={view.kind === "desk"}
           onClick={() => go({ kind: "desk" })}
-          badge={desk?.waiting ? <span className="rounded-full bg-you px-2 text-[12px] font-bold leading-5 text-you-ink">{desk.waiting}</span> : null}
+          badge={desk?.waiting ? <span className="rounded-full bg-accent px-2 text-[12px] font-bold leading-5 text-white">{desk.waiting}</span> : null}
         >
           Founder desk
         </NavItem>
-        <NavItem active={view.kind === "rules"} onClick={() => go({ kind: "rules" })} badge={<span className={`text-[12px] ${view.kind === "rules" ? "text-paper/70" : "text-faint"}`}>{plural(active, "rule")}</span>}>
+        <NavItem active={view.kind === "rules"} onClick={() => go({ kind: "rules" })} badge={<span className={`text-[12px] ${view.kind === "rules" ? "text-white/70" : "text-faint"}`}>{plural(active, "rule")}</span>}>
           Rulebook
         </NavItem>
       </div>
 
       <div>
-        <p className="px-3 text-[13px] font-semibold text-ink">Channels</p>
+        <p className="px-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.09em] text-muted">Rooms</p>
         <div className="mt-1 space-y-0.5">
           {channels.map((c) => (
             <NavItem
@@ -169,8 +172,13 @@ export function Sidebar({ overview, view, go }: { overview: Overview; view: View
               onClick={() => go({ kind: "channel", roomId: c._id })}
               badge={working.has(c.name) ? <span className="working h-2 w-2 rounded-full bg-rule" title="An agent is working here" /> : null}
             >
-              <span className="text-faint">#</span>
-              {c.name.slice(1)}
+              <span className="flex items-center gap-2.5">
+                <span className={`h-3 w-3 shrink-0 rounded-[4px] ${DEPT_GRAD[ROOM_DEPT[c.name] ?? ""] ?? "grad-none"}`} aria-hidden />
+                <span>
+                  <span className={view.kind === "channel" && view.roomId === c._id ? "text-white/60" : "text-faint"}>#</span>
+                  {c.name.slice(1)}
+                </span>
+              </span>
             </NavItem>
           ))}
         </div>

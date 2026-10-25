@@ -157,3 +157,12 @@ describe("confirm and runDue", () => {
     });
   });
 });
+
+describe("parseRecurringBrief", () => {
+  test("round-trips recurringBrief and strips the standing instruction", async () => {
+    const { parseRecurringBrief, recurringBrief } = await import("../convex/lib/recurring");
+    const t = DEFAULT_PLAN[3];
+    expect(parseRecurringBrief(recurringBrief(t))).toEqual({ cadence: t.cadence_label, title: t.title, brief: t.brief });
+    expect(parseRecurringBrief("Handle ticket 123: charged twice")).toBeNull();
+  });
+});

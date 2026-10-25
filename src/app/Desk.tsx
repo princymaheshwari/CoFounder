@@ -26,12 +26,12 @@ export function Desk({ roomId, overview, onOpen }: { roomId: Id<"rooms">; overvi
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
-      <ChannelHeader name="Founder desk" purpose={PURPOSE["#founder-desk"]} members={cofounder} />
+      <ChannelHeader name="Founder desk" room="#founder-desk" purpose={PURPOSE["#founder-desk"]} members={cofounder} />
       <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-8 py-6">
         {data === undefined ? <p className="text-muted">Loading…</p> : null}
         {data && !open.length ? (
-          <div className="max-w-[60ch] rounded-lg border border-dashed border-line-2 px-6 py-8">
-            <p className="font-serif text-[22px] leading-snug text-ink">Nothing needs you right now.</p>
+          <div className="max-w-[60ch] rounded-[14px] border border-dashed border-ink/20 bg-white/40 px-6 py-8">
+            <p className="text-[24px] font-medium leading-snug tracking-[-0.025em] text-ink">Nothing needs you right now.</p>
             <p className="mt-2 text-[15px] text-muted">
               {t.byRules + t.byFounder > 0
                 ? `Rules have made ${plural(t.byRules, "decision")} without you; you've made ${t.byFounder}. When something is new, risky or over budget, it shows up here.`

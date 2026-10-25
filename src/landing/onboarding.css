@@ -363,31 +363,6 @@
 .ob-keep input {
   accent-color: #fff;
 }
-.ob-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.95);
-  color: #2d2d2d;
-  font-size: 12.5px;
-  font-weight: 500;
-  text-decoration: none;
-}
-.ob-open.is-muted {
-  background: rgba(255, 255, 255, 0.3);
-  color: #fff;
-}
-.ob-live {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #2f7a5b;
-  animation: working 1.4s ease-in-out infinite;
-}
 .ob-empty {
   position: relative;
   margin: 0;
@@ -408,8 +383,7 @@
 @media (prefers-reduced-motion: reduce) {
   .ob-card,
   .ob-task,
-  .ob-task--ghost,
-  .ob-live {
+  .ob-task--ghost {
     animation: none;
   }
 }

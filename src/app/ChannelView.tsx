@@ -3,9 +3,9 @@ import { useEffect, useRef } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { ago, clock, plural } from "../lib/format";
-import { Digest } from "./Messages";
+import { AssignBody, Digest } from "./Messages";
 import { RequestCard } from "./RequestCard";
-import { Avatar, Pill, useFresh, useNow, type Entry, type Overview } from "./ui";
+import { Avatar, DeptChip, Pill, ROOM_DEPT, useFresh, useNow, type Entry, type Overview } from "./ui";
 
 // A department channel: one entry per task thread. Opening a thread shows the whole conversation beside it.
 // #founder-desk uses the same data but leads with the founder's requests (see Desk).
@@ -29,12 +29,14 @@ const STATUS: Record<string, { tone: "you" | "rule" | "quiet" | "ink"; text: str
   failed: { tone: "quiet", text: "Failed" },
 };
 
-export function ChannelHeader({ name, purpose, members }: { name: string; purpose: string; members: Overview["agents"] }) {
+export function ChannelHeader({ name, purpose, members, room }: { name: string; purpose: string; members: Overview["agents"]; room?: string }) {
+  const dept = ROOM_DEPT[room ?? name];
   return (
-    <header className="border-b border-line bg-paper/95 px-8 pb-4 pt-6 backdrop-blur">
+    <header className="border-b border-white/60 bg-white/30 px-8 pb-4 pt-6">
       <div>
         <div className="min-w-0">
-          <h1 className="text-[24px] font-bold leading-tight tracking-[-0.01em]">{name}</h1>
+          {dept ? <DeptChip dept={dept}>{dept === "leadership" && name === "Founder desk" ? "Founder" : dept}</DeptChip> : null}
+          <h1 className="mt-2 text-[30px] font-medium leading-tight tracking-[-0.035em]">{name}</h1>
           <p className="mt-1 max-w-[80ch] text-[14px] text-muted">{purpose}</p>
         </div>
         {members.length ? (
@@ -44,7 +46,7 @@ export function ChannelHeader({ name, purpose, members }: { name: string; purpos
                 <span className="relative">
                   <Avatar name={a.name} kind="agent" size={28} />
                   <span
-                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-paper ${a.state === "working" ? "working bg-rule" : a.state === "escalated" ? "bg-you" : "bg-line-2"}`}
+                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${a.state === "working" ? "working bg-rule" : a.state === "escalated" ? "bg-you" : "bg-line-2"}`}
                   />
                 </span>
                 <span className="text-[13px] leading-tight">
@@ -68,20 +70,22 @@ function ThreadEntry({ entry, onOpen, selected, fresh, now }: { entry: Entry; on
     <li>
       <button
         onClick={() => onOpen(t.root)}
-        className={`group flex w-full gap-3 rounded-lg px-4 py-3 text-left ${selected ? "bg-surface ring-1 ring-line-2" : "hover:bg-surface"} ${fresh ? "arrive" : ""}`}
+        className={`group flex w-full gap-3 rounded-[14px] px-4 py-3 text-left transition-colors ${selected ? "bg-white/75 ring-1 ring-white" : "hover:bg-white/55"} ${fresh ? "arrive" : ""}`}
       >
-        <Avatar name={m.to ?? m.sender} kind={m.to ? "agent" : m.senderKind} />
+        <Avatar name={m.sender} kind={m.senderKind} />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-semibold text-ink">{m.to ?? m.sender}</span>
-            <span className="text-[13px] text-muted">{m.kind === "handoff" ? "picked up a handoff" : "got a task"}</span>
+            <span className="font-semibold text-ink">{m.sender}</span>
+            {m.kind === "assign" || m.kind === "handoff" ? <span className="text-[13px] text-muted">{m.kind === "handoff" ? "handed off" : "assigned"}</span> : null}
             <span className="text-[12px] text-faint">{clock(m.at)}</span>
           </span>
-          <span className="mt-0.5 block max-w-[72ch] text-[15px] text-ink">{m.headline}</span>
+          <span className="mt-0.5 block">
+            <AssignBody m={m} />
+          </span>
           <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
             <span className="flex -space-x-1.5">
               {t.people.slice(0, 4).map((p) => (
-                <span key={p} className="rounded-[8px] ring-2 ring-paper">
+                <span key={p} className="rounded-[8px] ring-2 ring-white">
                   <Avatar name={p} kind="agent" size={20} />
                 </span>
               ))}
@@ -103,7 +107,7 @@ function StandaloneEntry({ entry, fresh }: { entry: Entry; fresh: boolean }) {
   if (m.kind === "digest") return <li className={`rounded-lg px-4 ${fresh ? "arrive" : ""}`}><Digest m={m} /></li>;
   if (m.request) return <li className={`py-2 ${fresh ? "arrive" : ""}`}><RequestCard request={m.request} at={m.at} /></li>;
   return (
-    <li className={`flex gap-3 rounded-lg px-4 py-2.5 ${fresh ? "arrive" : ""}`}>
+    <li className={`flex gap-3 rounded-[14px] px-4 py-2.5 ${fresh ? "arrive" : ""}`}>
       <Avatar name="Dispatcher" kind="system" size={24} />
       <p className="text-[14px] text-muted">
         {m.headline} <span className="text-[12px] text-faint">{clock(m.at)}</span>

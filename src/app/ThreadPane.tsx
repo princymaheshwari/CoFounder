@@ -24,13 +24,13 @@ export function ThreadPane({ taskId, onClose }: { taskId: Id<"tasks">; onClose: 
   }, [data?.messages.length]);
 
   return (
-    <aside className="flex w-[460px] shrink-0 flex-col border-l border-line bg-surface" aria-label="Thread">
-      <header className="flex items-start justify-between gap-4 border-b border-line px-6 pb-4 pt-6">
+    <aside className="flex w-[460px] shrink-0 flex-col border-l border-white/70 bg-white/55" aria-label="Thread">
+      <header className="flex items-start justify-between gap-4 border-b border-white/70 px-6 pb-4 pt-6">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-muted">Thread in {data?.room ?? "…"}</p>
-          <h2 className="mt-0.5 text-[16px] font-semibold leading-snug text-ink">{data?.title ?? ""}</h2>
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Thread in {data?.room ?? "…"}</p>
+          <h2 className="mt-0.5 text-[18px] font-medium leading-snug tracking-[-0.02em] text-ink">{data?.title ?? ""}</h2>
         </div>
-        <button onClick={onClose} className="-mr-2 rounded-md px-2 py-1 text-[13px] font-medium text-muted hover:bg-sunk" aria-label="Close thread">
+        <button onClick={onClose} className="-mr-2 rounded-full border border-ink/10 bg-white/70 px-3 py-1 text-[13px] font-medium text-ink hover:bg-white" aria-label="Close thread">
           Close
         </button>
       </header>
@@ -46,7 +46,7 @@ export function ThreadPane({ taskId, onClose }: { taskId: Id<"tasks">; onClose: 
             <h3 className="text-[14px] font-semibold text-ink">Who decided</h3>
             <ul className="mt-2 space-y-2">
               {data.actions.map((a) => (
-                <li key={a._id} className="rounded-md border border-line px-3 py-2.5">
+                <li key={a._id} className="rounded-[10px] border border-white/80 bg-white/60 px-3 py-2.5">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-[14px] font-medium text-ink">{a.text}</p>
                     <Outcome status={a.status} effect={a.effect} reason={a.reason} rule={a.rule} />

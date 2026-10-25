@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { CATALOG } from "./lib/catalog";
+import { parseRecurringBrief } from "./lib/recurring";
 import { conditionText } from "./lib/rules";
 
 // Read models for the founder app: channels, threads, the founder's requests in #founder-desk, who decided
@@ -101,6 +102,7 @@ const vMessage = v.object({
   envelope: v.union(v.null(), vEnvelope),
   request: v.union(v.null(), vRequest),
   run: v.union(v.string(), v.null()),
+  recurring: v.union(v.null(), v.object({ cadence: v.string(), title: v.string() })), // an ASSIGN for recurring work (onboarding)
 });
 type MessageVM = typeof vMessage.type;
 
@@ -200,6 +202,7 @@ async function messageVM(ctx: QueryCtx, m: Doc<"messages">, names: Map<string, s
     envelope: null,
     request: m.inbox ? await requestVM(ctx, m.inbox) : null,
     run: m.creao_run_id && !m.creao_run_id.startsWith("story-") ? m.creao_run_id : null,
+    recurring: null as { cadence: string; title: string } | null,
   };
   if (m.sender_kind === "agent") {
     const e = m.envelope && typeof m.envelope === "object" ? (m.envelope as Env) : null;
@@ -239,11 +242,13 @@ async function messageVM(ctx: QueryCtx, m: Doc<"messages">, names: Map<string, s
   if (type === "ASSIGN") {
     const to = typeof env?.to === "string" ? env.to : null;
     const isHandoff = /handoff from/i.test(line);
+    const rec = parseRecurringBrief(txt(env?.brief));
     return {
       ...common,
       kind: isHandoff ? "handoff" : "assign",
       to: to ? (names.get(to) ?? to) : null,
-      headline: tidy(txt(env?.brief) || line),
+      headline: tidy(rec?.brief || txt(env?.brief) || line),
+      recurring: rec ? { cadence: rec.cadence, title: rec.title } : null,
       rules: Array.isArray(env?.rules_in_scope) ? (env.rules_in_scope as unknown[]).map(String) : [],
     };
   }
@@ -477,7 +482,7 @@ export const thread = query({
     }
     const room = await ctx.db.get(task.room);
     return {
-      title: tidy(clip(task.brief, 160)),
+      title: tidy(parseRecurringBrief(task.brief)?.title ?? clip(task.brief, 160)),
       role: names.get(task.role) ?? task.role,
       room: room?.name ?? "",
       status: task.status,

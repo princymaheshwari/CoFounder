@@ -1,17 +1,16 @@
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useState, type DragEvent, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import "./landing.css";
 import "./onboarding.css";
 
 // Onboarding (#start): the founder describes the company, Cofounder plans the recurring work for each
-// department (Claude, via onboarding.plan), and confirming opens one thread per task with a first live run.
+// department (Claude, via onboarding.plan), and confirming opens one thread per task with a first live run,
+// then drops the founder into the workspace (the company's rooms) on #customer.
 
 type Doc = { name: string; excerpt: string };
 type Task = { role: string; room: string; title: string; brief: string; trigger: "interval" | "event"; every_ms?: number; event_type?: string; cadence_label: string };
-type Created = { recurringId: Id<"recurring">; taskId: Id<"tasks">; roomId: Id<"rooms">; room: string; title: string };
-type Step = "form" | "planning" | "plan" | "creating" | "done";
+type Step = "form" | "planning" | "plan" | "creating";
 
 // The demo company, ready to edit.
 const EXAMPLE = {
@@ -40,10 +39,10 @@ const TEXT_FILE = /\.(txt|md|markdown|csv|json)$/i;
 const humanRole = (role: string) => role.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 function Steps({ step }: { step: Step }) {
-  const at = step === "form" ? 0 : step === "done" ? 2 : 1;
+  const at = step === "form" ? 0 : 1;
   return (
     <ol className="ob-steps" aria-label="Onboarding steps">
-      {["Your company", "Your team's routine", "Ready"].map((s, i) => (
+      {["Your company", "Your team's routine", "Your workspace"].map((s, i) => (
         <li key={s} className={i === at ? "on" : i < at ? "done" : ""} aria-current={i === at ? "step" : undefined}>
           <span>{i + 1}</span>
           {s}
@@ -68,7 +67,6 @@ export function Onboarding() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [source, setSource] = useState<"claude" | "fallback">("claude");
   const [off, setOff] = useState<Set<number>>(new Set());
-  const [created, setCreated] = useState<Created[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -118,8 +116,9 @@ export function Onboarding() {
     setError(null);
     setStep("creating");
     try {
-      setCreated(await confirmFn({ input: input(), tasks: tasks.filter((_, i) => !off.has(i)) }));
-      setStep("done");
+      const created = await confirmFn({ input: input(), tasks: tasks.filter((_, i) => !off.has(i)) });
+      const first = created.find((c) => c.room === "#customer") ?? created[0];
+      window.location.hash = first ? `#c/${first.roomId}` : "#desk";
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStep("plan");
@@ -236,12 +235,12 @@ export function Onboarding() {
         <section className="ob-card ob-plan" aria-live="polite">
           <div className="ob-plan__head">
             <div>
-              <h1>{step === "done" ? "Your team is running." : step === "planning" ? "Cofounder is planning your team…" : "Here is your team's routine."}</h1>
+              <h1>{step === "planning" ? "Cofounder is planning your team…" : step === "creating" ? "Setting up your workspace…" : "Here is your team's routine."}</h1>
               <p>
                 {step === "planning"
                   ? PLANNING_LINES[line]
-                  : step === "done"
-                    ? "Each recurring task has a thread in its channel. The Dispatcher just started the first run of each one on a live agent."
+                  : step === "creating"
+                    ? "Opening a room for each department and assigning every recurring task to its agent."
                     : source === "claude"
                       ? "The main cofounder agent finds the recurring tasks to automate and assigns them to relevant employees. UNSELECT any task you don't want to get automated."
                       : "Cofounder couldn't reach the planner, so this is the starter plan. Untick anything you don't want."}
@@ -255,12 +254,6 @@ export function Onboarding() {
                 <button type="button" className="lp-btn lp-btn--primary lp-btn--start" disabled={step === "creating" || off.size === tasks.length} onClick={() => void create()}>
                   {step === "creating" ? "Opening threads…" : "Create recurring threads"} <span aria-hidden="true">→</span>
                 </button>
-              </div>
-            ) : step === "done" ? (
-              <div className="ob-plan__actions">
-                <a className="lp-btn lp-btn--primary lp-btn--start" href="#desk">
-                  Open the founder desk <span aria-hidden="true">→</span>
-                </a>
               </div>
             ) : null}
           </div>
@@ -282,7 +275,6 @@ export function Onboarding() {
                     </>
                   ) : items.length ? (
                     items.map(({ t, i }) => {
-                      const done = created.find((x) => x.title === t.title && x.room === t.room);
                       const skipped = off.has(i);
                       return (
                         <article key={i} className={`ob-task${skipped ? " is-off" : ""}`} style={{ animationDelay: `${i * 0.08}s` }}>
@@ -292,19 +284,9 @@ export function Onboarding() {
                           </div>
                           <h3>{t.title}</h3>
                           <p>{t.brief}</p>
-                          {step === "done" ? (
-                            done ? (
-                              <a className="ob-open" href={`#c/${done.roomId}/t/${done.taskId}`}>
-                                <i className="ob-live" aria-hidden="true" /> First run started · open thread →
-                              </a>
-                            ) : (
-                              <span className="ob-open is-muted">Skipped</span>
-                            )
-                          ) : (
-                            <label className="ob-keep">
-                              <input type="checkbox" checked={!skipped} onChange={() => toggle(i)} disabled={step === "creating"} /> Keep
-                            </label>
-                          )}
+                          <label className="ob-keep">
+                            <input type="checkbox" checked={!skipped} onChange={() => toggle(i)} disabled={step === "creating"} /> Keep
+                          </label>
                         </article>
                       );
                     })

@@ -19,11 +19,21 @@ export const RosterProvider = ({ agents, children }: { agents: Overview["agents"
 );
 export const useRoster = () => useContext(RosterContext);
 
-const DEPT_BG: Record<string, string> = {
-  customer: "bg-dept-customer",
-  finance: "bg-dept-finance",
-  marketing: "bg-dept-marketing",
-  leadership: "bg-dept-leadership",
+// Department gradients from the landing diagram (index.css .grad-*).
+export const DEPT_GRAD: Record<string, string> = {
+  customer: "grad-customer",
+  finance: "grad-finance",
+  marketing: "grad-marketing",
+  leadership: "grad-leadership",
+};
+
+// Which department a channel belongs to, by name.
+export const ROOM_DEPT: Record<string, string> = {
+  "#customer": "customer",
+  "#finance": "finance",
+  "#marketing": "marketing",
+  "#leadership": "leadership",
+  "#founder-desk": "leadership",
 };
 
 const initials = (name: string) =>
@@ -41,7 +51,7 @@ export function Avatar({ name, kind, size = 32 }: { name: string; kind: string; 
   const style = { width: size, height: size, fontSize: size * 0.38 };
   if (kind === "system")
     return (
-      <span style={style} className="grid shrink-0 place-items-center rounded-[7px] border border-line-2 bg-surface font-semibold text-muted" aria-hidden>
+      <span style={style} className="grid shrink-0 place-items-center rounded-[8px] border border-dashed border-ink-2/60 bg-white/80 font-semibold text-ink-2" aria-hidden>
         <svg viewBox="0 0 16 16" width={size * 0.5} height={size * 0.5} fill="none" stroke="currentColor" strokeWidth="1.6">
           <path d="M2 8h8M7 4l4 4-4 4M13 3v10" />
         </svg>
@@ -49,12 +59,12 @@ export function Avatar({ name, kind, size = 32 }: { name: string; kind: string; 
     );
   if (kind === "founder")
     return (
-      <span style={style} className="grid shrink-0 place-items-center rounded-[7px] bg-you font-bold text-you-ink" aria-hidden>
+      <span style={style} className="grid shrink-0 place-items-center rounded-[8px] bg-ink font-bold text-white" aria-hidden>
         You
       </span>
     );
   return (
-    <span style={style} className={`grid shrink-0 place-items-center rounded-[7px] font-semibold text-white ${DEPT_BG[deptOfName.get(name) ?? ""] ?? "bg-ink-2"}`} aria-hidden>
+    <span style={style} className={`grid shrink-0 place-items-center rounded-[8px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] ${DEPT_GRAD[deptOfName.get(name) ?? ""] ?? "grad-none"}`} aria-hidden>
       {initials(name)}
     </span>
   );
@@ -82,6 +92,14 @@ const TONE: Record<string, string> = {
 };
 export const Pill = ({ tone, children }: { tone: keyof typeof TONE; children: ReactNode }) => (
   <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-semibold leading-5 ${TONE[tone]}`}>{children}</span>
+);
+
+// An agent tagged in a message, Slack style.
+export const Mention = ({ name }: { name: string }) => <span className="rounded-[5px] bg-accent-soft px-1 font-semibold text-accent">@{name}</span>;
+
+// A department label in the onboarding column style: mono caps on the department gradient.
+export const DeptChip = ({ dept, children }: { dept: string; children: ReactNode }) => (
+  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-white ${DEPT_GRAD[dept] ?? "grad-none"}`}>{children}</span>
 );
 
 // A clock that re-renders relative times.

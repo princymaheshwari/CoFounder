@@ -1,33 +1,38 @@
 @import "tailwindcss";
 
-/* Cofounder founder app. Two signal colours carry meaning everywhere:
-   highlighter = needs the founder, rule green = decided by a rule. Nothing else is coloured for decoration. */
+/* Cofounder workspace. Same look as the landing page and onboarding: paper stage, Inter, glass panels,
+   department gradients and the red accent. Two signal colours still carry meaning everywhere:
+   "you" (rose) = needs the founder, "rule" (green) = decided by a rule. */
 @theme {
-  --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Newsreader", ui-serif, Georgia, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; /* headlines; Inter like onboarding */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --color-paper: #f3f4f1;
+  --color-paper: #ececeb;
   --color-surface: #ffffff;
-  --color-sunk: #e9ebe6;
-  --color-ink: #1c2321;
-  --color-ink-2: #3a4441;
-  --color-muted: #5e6a66;
-  --color-faint: #8b9591;
-  --color-line: #d8ddd8;
-  --color-line-2: #c6ccc6;
+  --color-sunk: #e4e4e1;
+  --color-ink: #202020;
+  --color-ink-2: #3a3a3a;
+  --color-muted: #5f5f5f;
+  --color-faint: #8a8a8a;
+  --color-line: #dcdcd8;
+  --color-line-2: #c9c9c4;
 
-  --color-you: #f2c230;
-  --color-you-soft: #fcefc2;
-  --color-you-ink: #5c4300;
+  --color-accent: #ad314d;
+  --color-accent-soft: #f8e3e9;
+
+  --color-you: #e8a3b5;
+  --color-you-soft: #f8e3e9;
+  --color-you-ink: #7a1630;
   --color-rule: #2f7a5b;
   --color-rule-soft: #dcefe5;
   --color-stop: #a33a2c;
   --color-stop-soft: #f6e1dd;
 
-  --color-dept-customer: #34658a;
-  --color-dept-finance: #6a4f86;
-  --color-dept-marketing: #a04b3c;
-  --color-dept-leadership: #2e3b4e;
+  --color-dept-customer: #9d6bc0;
+  --color-dept-finance: #dd523c;
+  --color-dept-marketing: #ad355b;
+  --color-dept-leadership: #6e1639;
 }
 
 html,
@@ -38,12 +43,16 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-paper);
+  background:
+    linear-gradient(rgba(236, 236, 234, 0.1), rgba(236, 236, 234, 0.1)),
+    url("https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/5c3ec08f-2dbf-4c0a-8588-f6106a789443.webp") center / cover fixed no-repeat,
+    var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto;
 }
 
 :focus-visible {
@@ -88,4 +97,33 @@ body {
 .scroll-quiet {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line-2) transparent;
+}
+
+/* Glass panel, as in onboarding (.ob-card). */
+.glass {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  box-shadow:
+    0 2px 4px rgba(50, 28, 39, 0.1),
+    0 40px 80px -40px rgba(50, 28, 39, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Department gradients (the landing diagram's panels), for avatars, channel marks and chips. */
+.grad-marketing {
+  background: linear-gradient(180deg, #bd4468 0%, #ad355b 38%, #a63b50 72%, #8c1320 100%);
+}
+.grad-customer {
+  background: linear-gradient(164deg, #c9b5e1 0%, #ad80ca 29%, #9d4f72 64%, #793246 100%);
+}
+.grad-finance {
+  background: linear-gradient(177deg, #d84736 0%, #dd523c 24%, #e8703d 52%, #de5641 78%, #d34239 100%);
+}
+.grad-leadership {
+  background: linear-gradient(150deg, #c0436a 0%, #ad314d 55%, #6e1639 100%);
+}
+.grad-none {
+  background: linear-gradient(150deg, #4a4a4a, #202020);
 }

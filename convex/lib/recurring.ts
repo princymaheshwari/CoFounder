@@ -59,6 +59,13 @@ export const recurringBrief = (t: Pick<PlanTask, "cadence_label" | "title" | "br
 
 export const nextRunAt = (everyMs: number, from: number) => from + everyMs;
 
+// The inverse of recurringBrief, for showing a recurring ASSIGN as "@Owner · title · cadence" in the app.
+export function parseRecurringBrief(brief: string): { cadence: string; title: string; brief: string } | null {
+  const m = /^Recurring · (.+?) · (.+?)\. ([\s\S]*)$/.exec(brief);
+  if (!m) return null;
+  return { cadence: m[1], title: m[2], brief: m[3].replace(RECURRING_SUFFIX, "").trim() };
+}
+
 export const DEFAULT_PLAN: PlanTask[] = [
   {
     role: "support",
