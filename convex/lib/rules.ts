@@ -25,7 +25,7 @@ export function ruleInScope(rule: ScopedRule, role: Role, department: Department
   );
 }
 
-// The action types each role proposes or carries up the ladder (agents/roles.md). A role not listed
+// The action types each role proposes or carries up the ladder (agents/creao/). A role not listed
 // (the Cofounder) may see any type.
 export const ROLE_ACTIONS: Partial<Record<Role, readonly ActionType[]>> = {
   support: ["refund", "reply_customer"],

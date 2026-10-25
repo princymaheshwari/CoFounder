@@ -281,26 +281,25 @@ describe("Dispatcher formatters", () => {
 });
 
 describe("agent prompts use the protocol's field names", () => {
-  const envelopeFields = ["type", "task", "from", "summary", "findings", "claim", "evidence", "proposed_actions", "params", "rationale", "to_role", "brief", "kind", "need", "attempts", "refs", "issue"];
-  const assignFields = ["task", "to", "company", "brief", "token", "rules_in_scope", "data_hints", "refs"];
-  const types = ["REPORT", "HANDOFF", "ISSUE", "ESCALATE", "OBJECT", "DECISION"];
+  // Each role's prompt lists only the envelope types it sends; these fields every role needs.
+  const envelopeFields = ["type", "task", "from", "summary", "findings", "claim", "evidence", "refs", "kind", "issue"];
+  const assignFields = ["task", "to", "company", "brief", "token", "rules_in_scope", "data_hints", "refs", "repair", "attempt"];
   const kinds = ["information", "coordination", "authority", "capability"];
 
-  const roles = readFileSync("agents/roles.md", "utf8");
-  const preamble = roles.slice(roles.indexOf("## Shared preamble"), roles.indexOf("Role ids:"));
-  const setupFiles = ["01-support", "02-ledger", "03-customer_manager", "04-finance_manager", "05-cofounder", "06-retention", "07-spend", "08-marketing_manager", "09-market_intel", "10-content"];
+  const pasted = (role: string) => {
+    const text = readFileSync(`agents/creao/${role}.md`, "utf8");
+    return text.slice(text.indexOf("---- PASTE BELOW THIS LINE INTO CREAO ----"));
+  };
+  const roleFiles = ["support", "ledger", "customer_manager", "finance_manager", "cofounder", "retention", "spend", "marketing_manager", "market_intel", "content"];
 
-  test.each([["agents/roles.md shared preamble", preamble], ...setupFiles.map((f) => [`agents/setup/${f}.md`, readFileSync(`agents/setup/${f}.md`, "utf8")])])(
-    "%s",
-    (_name, text) => {
-      for (const word of [...envelopeFields, ...assignFields, ...types, ...kinds]) {
-        expect(text, `missing "${word}"`).toContain(word);
-      }
-    },
-  );
+  test.each(roleFiles.map((f) => [`agents/creao/${f}.md`, pasted(f)]))("%s", (_name, text) => {
+    for (const word of [...envelopeFields, ...assignFields, ...kinds, "REPORT", "ISSUE"]) {
+      expect(text, `missing "${word}"`).toContain(word);
+    }
+  });
 
   test("the Cofounder prompt names every package field", () => {
-    const cofounder = roles.slice(roles.indexOf("## Cofounder ("));
+    const cofounder = pasted("cofounder");
     for (const word of ["package", "situation", "evidence", "attempts", "options", "label", "action", "recommendation"]) {
       expect(cofounder, `missing "${word}"`).toContain(word);
     }

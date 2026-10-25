@@ -45,7 +45,7 @@ async function ticketFor(ctx: QueryCtx, p: Record<string, unknown>): Promise<Doc
   return id ? await ctx.db.get(id) : null;
 }
 
-// Evidence is a URL, a record id, or a channel reference like "#finance/1043" (agents/roles.md). Only
+// Evidence is a URL, a record id, or a channel reference like "#finance/1043" (agents/creao/). Only
 // Convex records are read; a URL counts when it is a stored signal's evidence (nothing is fetched from the web).
 async function evidenceText(ctx: QueryCtx, ref: string): Promise<string> {
   const channelRef = /^(#[\w-]+)\/(\d+)$/.exec(ref.trim());

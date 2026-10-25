@@ -34,7 +34,7 @@ export type ExecutorOutcome =
   | { kind: "failed"; reason: string };
 
 // The Executor ends with {"type":"REPORT","task":"<action_id>","from":"executor","summary":"executed"|"failed: …",
-// "findings":[{"claim":"executed","evidence":"<provider id or URL>"}]} (agents/setup/11-executor.md).
+// "findings":[{"claim":"executed","evidence":"<provider id or URL>"}]} (agents/creao/executor.md).
 export function readExecutorReply(text: string, actionId: string): ExecutorOutcome {
   const parsed = parseEnvelope(text, { taskId: actionId, role: "executor" });
   if (!parsed.ok) return { kind: "failed", reason: `invalid envelope: ${parsed.error}` };

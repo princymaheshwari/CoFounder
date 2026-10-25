@@ -1,5 +1,5 @@
 // Filled by hand from agent.creao.ai (spec 00, manual step 2), then loaded by seed:config.
-// creao_app_id: the App ID on each agent's page (tracker: agents/setup/README.md).
+// creao_app_id: the App ID on each agent's page (tracker: agents/creao/README.md).
 // input_field: the agent's Input Form field id (Advanced → Configuration → Input Form).
 
 // Demo company profile (fictional). Agents are company-agnostic: this reaches them only as the

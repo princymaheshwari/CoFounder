@@ -6,7 +6,7 @@ Built solo at Cal Hacks 13.0 (deadline: Sunday morning, confirm exact time). Opt
 
 - Full design: `docs/system-design.md`
 - Build specs, one per feature, in build order: `docs/specs/README.md`
-- Creao agent role prompts (pasted into Creao, not code): `agents/roles.md`
+- Creao agent setup prompts (pasted into Creao, not code), one per agent: `agents/creao/` (start with its README)
 
 ## How to work in this repo
 
@@ -53,7 +53,7 @@ cofounder/
   docs/
     system-design.md
     specs/                 one spec per feature (00-… to 17-…), index in specs/README.md
-  agents/roles.md          Creao agent prompts (manual setup)
+  agents/creao/            Creao agent setup prompts, one file per agent + README (manual setup)
   convex/
     schema.ts
     lib/                   pure helpers: envelope.ts, rules.ts, gate.ts, tokens.ts
