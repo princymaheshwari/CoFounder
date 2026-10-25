@@ -134,7 +134,7 @@ This is the **only** Creao API we use. Known from Creao docs (https://docs.creao
 - Embeddings: `POST /v1/embeddings` (OpenAI shape).
 
 ### Nessie — key as query param `?key=…`
-- Base: `https://api.nessieisreal.com` (verified 2026-10-24; plain `http` times out).
+- Base: `https://prod-api.nessieisreal.com` (production server in the official docs, https://prod.nessieisreal.com/docs; spec at `/nessie-openapi-spec.yaml`). `api.nessieisreal.com` serves the same data; plain `http` times out.
 - Customers `/customers`, accounts `/customers/{id}/accounts`, `/accounts/{id}`, purchases `/accounts/{id}/purchases` (GET/POST), transfers `/accounts/{id}/transfers` (GET/POST), deposits, bills `/accounts/{id}/bills` (GET/POST), `PUT /bills/{id}`, merchants `/merchants` (GET/POST). Verified request bodies are in spec 08's "Decisions made while building".
 - Verified quirks: transfers have **no payee** (body `{transaction_date, status, amount, description}`) and move no balance; amounts are **whole dollars** (decimals truncated); nothing is idempotent (we tag objects `[cf:<key>]` in description/nickname); a wrong key returns `200 []`.
 
