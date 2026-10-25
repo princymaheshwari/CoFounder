@@ -20,6 +20,7 @@ import {
   type MirrorRow,
   type NessieObject,
 } from "./lib/nessie";
+import { DAY_MS } from "./lib/co";
 import { vLedgerKind } from "./lib/types";
 import { nessieCreate, nessieGet, nessieList, nessieUpdate } from "./nessieApi";
 import { ADDRESS, CUSTOMER_ACCOUNT, MERCHANTS, OPERATING, buildSeedPlan, type SeedItem } from "./seedData";
@@ -508,8 +509,46 @@ const vBegin = v.union(
     items: v.array(vExecItem),
     done: v.array(v.string()), // markers already executed
     resume: v.boolean(),
+    skipped: v.array(v.object({ marker: v.string(), to_account: v.string(), reason: v.string() })),
   }),
 );
+
+// Double-refund guard (spec 09 live run): the founder may approve overlapping actions (a Support refund and a
+// Ledger batch for the same customer). A refund item is skipped when the customer got a refund from the
+// operating account in the last REFUND_GUARD_DAYS, another executing action is refunding them, or the batch
+// lists them twice. Checked inside beginExecution, so concurrent executions serialize on it.
+const REFUND_GUARD_DAYS = 30;
+
+async function refundConflicts(ctx: MutationCtx, action: Doc<"actions">, items: ExecItem[], op: string): Promise<Map<string, { to_account: string; reason: string }>> {
+  const skips = new Map<string, { to_account: string; reason: string }>();
+  const ownPrefix = `act-${action._id}-`;
+  const since = new Date(Date.now() - REFUND_GUARD_DAYS * DAY_MS).toISOString();
+  const inFlight = new Map<string, Id<"actions">>();
+  for (const other of await ctx.db.query("actions").withIndex("by_status", (q) => q.eq("status", "executing")).take(50)) {
+    if (other._id === action._id || CATALOG[other.type].executor !== "nessie") continue;
+    try {
+      for (const i of await planItems(ctx, other)) if (i.kind === "transfer") inFlight.set(i.to_account, other._id);
+    } catch {
+      // an unplannable action refunds no one
+    }
+  }
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (item.kind !== "transfer") continue;
+    const skip = (reason: string) => skips.set(item.marker, { to_account: item.to_account, reason });
+    const prior = (
+      await ctx.db
+        .query("ledger_mirror")
+        .withIndex("by_counterparty_date", (q) => q.eq("counterparty", item.to_account).gte("date", since))
+        .take(50)
+    ).find((r) => r.kind === "transfer" && r.account_id === op && !(markerOf(r.raw as NessieObject) ?? "").startsWith(ownPrefix));
+    if (seen.has(item.to_account)) skip("listed twice in this batch");
+    else if (prior) skip(`already refunded ${dollars(prior.amount_cents)} on ${prior.date.slice(0, 10)} (transfer ${prior.nessie_id})`);
+    else if (inFlight.has(item.to_account)) skip(`a refund is in flight in action ${inFlight.get(item.to_account)}`);
+    seen.add(item.to_account);
+  }
+  return skips;
+}
 
 export const beginExecution = internalMutation({
   args: { actionId: v.id("actions"), resume: v.boolean() },
@@ -548,9 +587,27 @@ export const beginExecution = internalMutation({
     }
     const done = items.filter((i) => (i.kind === "transfer" ? doneMarkers.has(i.marker) : refs.includes(i.bill_id))).map((i) => i.marker);
 
+    const conflicts = await refundConflicts(ctx, action, items.filter((i) => !done.includes(i.marker)), state.operating_account_id);
+    const skipped = [...conflicts].map(([marker, s]) => ({ marker, ...s }));
+    const run = items.filter((i) => !conflicts.has(i.marker));
+    if (skipped.length) {
+      await audit(ctx, { actor: "nessie", kind: "execution_skipped_items", ref: action.task, detail: { actionId, skipped } });
+    }
+    if (!run.some((i) => !done.includes(i.marker)) && done.length === 0) {
+      // Nothing left to pay: not a capability failure, so no ISSUE; the thread says why.
+      const error = `nothing to execute: ${skipped.map((s) => s.reason).join("; ")}`;
+      await ctx.db.patch(actionId, { status: "failed" });
+      await audit(ctx, { actor: "nessie", kind: "execution_failed", ref: action.task, detail: { actionId, type: action.type, error, executed_ref: [] } });
+      const task = await ctx.db.get(action.task);
+      if (task) {
+        await appendMessage(ctx, { room: task.room, task: task._id, sender_kind: "system", sender_name: "Dispatcher", text: `[Dispatcher] ${action.type} ${actionId} was not executed: ${error}.` });
+      }
+      return { kind: "failed", error };
+    }
+
     await ctx.db.patch(actionId, { status: "executing" });
-    await audit(ctx, { actor: "nessie", kind: "execution_started", ref: action.task, detail: { actionId, type: action.type, items: items.length, done: done.length, resume } });
-    return { kind: "ready", operating_account_id: state.operating_account_id, items, done, resume };
+    await audit(ctx, { actor: "nessie", kind: "execution_started", ref: action.task, detail: { actionId, type: action.type, items: run.length, done: done.length, skipped: skipped.length, resume } });
+    return { kind: "ready", operating_account_id: state.operating_account_id, items: run, done, resume, skipped };
   },
 });
 
@@ -571,9 +628,9 @@ export const recordExecutedItem = internalMutation({
 const vExecResult = v.object({ status: v.union(v.literal("executed"), v.literal("failed")), executed_ref: v.array(v.string()), error: v.optional(v.string()) });
 
 export const finishExecution = internalMutation({
-  args: { actionId: v.id("actions") },
+  args: { actionId: v.id("actions"), skipped: v.optional(v.array(v.string())) },
   returns: vExecResult,
-  handler: async (ctx, { actionId }): Promise<Infer<typeof vExecResult>> => {
+  handler: async (ctx, { actionId, skipped }): Promise<Infer<typeof vExecResult>> => {
     const action = await ctx.db.get(actionId);
     if (!action) throw new Error(`action ${actionId} not found`);
     const refs = action.executed_ref ?? [];
@@ -587,7 +644,9 @@ export const finishExecution = internalMutation({
         task: task._id,
         sender_kind: "system",
         sender_name: "Dispatcher",
-        text: `[Dispatcher] Executed ${action.type}${action.amount_cents !== undefined ? ` ${dollars(action.amount_cents)}` : ""} in Nessie (${what}).`,
+        text: `[Dispatcher] Executed ${action.type}${action.amount_cents !== undefined ? ` ${dollars(action.amount_cents)}` : ""} in Nessie (${what}).${
+          skipped?.length ? ` Skipped ${skipped.length} to avoid a double refund: ${skipped.join("; ")}.` : ""
+        }`,
       });
     }
     return { status: "executed", executed_ref: refs };
@@ -644,7 +703,7 @@ export const executeMoneyAction = internalAction({
         }
         await ctx.runMutation(internal.nessie.recordExecutedItem, { actionId, marker: item.marker, row });
       }
-      return await ctx.runMutation(internal.nessie.finishExecution, { actionId });
+      return await ctx.runMutation(internal.nessie.finishExecution, { actionId, skipped: begin.skipped.map((s) => s.reason) });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       await ctx.runMutation(internal.nessie.failExecution, { actionId, error });

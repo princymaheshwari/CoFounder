@@ -417,6 +417,53 @@ describe("executeMoneyAction", () => {
     expect(await t.action(internal.nessie.executeMoneyAction, { actionId: again })).toMatchObject({ status: "failed" });
   });
 
+  test("double-refund guard: a customer refunded in the last 30 days is not refunded again", async () => {
+    const t = setup();
+    const { taskId, customers } = await seeded(t);
+    const c = customers[3];
+    const first = await action(t, taskId, "refund", { customer_id: c._id, amount_cents: 3500 }, "allowed", "allow");
+    expect(await t.action(internal.nessie.executeMoneyAction, { actionId: first })).toMatchObject({ status: "executed" });
+
+    const again = await action(t, taskId, "refund", { customer_id: c._id, amount_cents: 3500 }, "allowed", "allow");
+    const posts = fake.posts;
+    const r = await t.action(internal.nessie.executeMoneyAction, { actionId: again });
+    expect(r.status).toBe("failed");
+    expect(r.error).toMatch(/^nothing to execute: already refunded \$35\.00 on \d{4}-\d{2}-\d{2}/);
+    expect(fake.posts).toBe(posts);
+    // Not a capability failure: no ISSUE, but the thread says why.
+    expect(await t.run((ctx) => ctx.db.query("issues").collect())).toHaveLength(0);
+    const msgs = await t.run((ctx) => ctx.db.query("messages").withIndex("by_task", (q) => q.eq("task", taskId)).collect());
+    expect(msgs.at(-1)!.text).toContain("was not executed: nothing to execute: already refunded");
+  });
+
+  test("double-refund guard: a batch skips already-refunded, repeated and in-flight customers and pays the rest", async () => {
+    const t = setup();
+    const { taskId, customers, op } = await seeded(t);
+    const [a, b, c, d] = customers;
+    await t.action(internal.nessie.executeMoneyAction, { actionId: await action(t, taskId, "refund", { customer_id: a._id, amount_cents: 3500 }, "allowed", "allow") });
+    // Another action is mid-execution for d.
+    await action(t, taskId, "refund", { customer_id: d._id, amount_cents: 3500 }, "executing", "allow");
+
+    const items = [a, b, b, c, d].map((x) => ({ customer_id: x._id, amount_cents: 3500 }));
+    const batch = await action(t, taskId, "refund_batch", { items, reason: "billing_error" }, "allowed", "allow");
+    const before = fake.transfersOf(op).length;
+    const r = await t.action(internal.nessie.executeMoneyAction, { actionId: batch });
+    expect(r.status).toBe("executed");
+    expect(r.executed_ref).toHaveLength(2); // b once, c
+    expect(fake.transfersOf(op).length - before).toBe(2);
+    const paid = fake.transfersOf(op).slice(-2).map((x) => readTags(x.description).to);
+    expect(paid).toEqual([b.nessie_account_id, c.nessie_account_id]);
+
+    const audits = await t.run(async (ctx) => (await ctx.db.query("audit_log").withIndex("by_ref", (q) => q.eq("ref", taskId)).collect()).filter((x) => x.kind === "execution_skipped_items"));
+    const reasons = (audits.at(-1)!.detail as { skipped: { reason: string }[] }).skipped.map((s) => s.reason);
+    expect(reasons).toHaveLength(3);
+    expect(reasons[0]).toMatch(/^already refunded/);
+    expect(reasons[1]).toBe("listed twice in this batch");
+    expect(reasons[2]).toMatch(/^a refund is in flight in action /);
+    const msgs = await t.run((ctx) => ctx.db.query("messages").withIndex("by_task", (q) => q.eq("task", taskId)).collect());
+    expect(msgs.at(-1)!.text).toContain("Skipped 3 to avoid a double refund");
+  });
+
   test("non-Nessie actions are refused", async () => {
     const t = setup();
     const { taskId } = await seeded(t);
