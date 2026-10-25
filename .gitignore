@@ -47,3 +47,6 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Browser automation snapshots (local)
+.playwright-mcp/
