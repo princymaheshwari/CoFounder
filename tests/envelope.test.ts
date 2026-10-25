@@ -84,6 +84,16 @@ describe("parseEnvelope accepts every type", () => {
     const env = expectOk(wrap({ ...base, type: "ISSUE", kind: "information", attempts: ["a"], proposed_actions: [refund] }));
     expect(env.proposed_actions).toBeUndefined();
   });
+
+  test("a REPORT may also carry an issue (spec 09); other types drop it", () => {
+    const issue = { kind: "coordination", summary: "Same double charge in 6 tickets.", attempts: ["co data tickets"] };
+    expect(expectOk(wrap({ ...base, type: "REPORT", proposed_actions: [refund], issue })).issue).toEqual(issue);
+    expect(expectOk(wrap({ ...base, type: "ISSUE", kind: "coordination", attempts: ["a"], issue })).issue).toBeUndefined();
+    expect(expectError(wrap({ ...base, type: "REPORT", issue: { ...issue, kind: "billing" } }))).toBe(
+      'Field "issue.kind" must be one of: information, coordination, authority, capability.',
+    );
+    expect(expectError(wrap({ ...base, type: "REPORT", issue: { ...issue, attempts: [] } }))).toBe('Field "issue.attempts" needs at least 1 item(s).');
+  });
 });
 
 describe("parseEnvelope rejects", () => {
@@ -271,7 +281,7 @@ describe("Dispatcher formatters", () => {
 });
 
 describe("agent prompts use the protocol's field names", () => {
-  const envelopeFields = ["type", "task", "from", "summary", "findings", "claim", "evidence", "proposed_actions", "params", "rationale", "to_role", "brief", "kind", "need", "attempts", "refs"];
+  const envelopeFields = ["type", "task", "from", "summary", "findings", "claim", "evidence", "proposed_actions", "params", "rationale", "to_role", "brief", "kind", "need", "attempts", "refs", "issue"];
   const assignFields = ["task", "to", "company", "brief", "token", "rules_in_scope", "data_hints", "refs"];
   const types = ["REPORT", "HANDOFF", "ISSUE", "ESCALATE", "OBJECT", "DECISION"];
   const kinds = ["information", "coordination", "authority", "capability"];

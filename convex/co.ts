@@ -320,11 +320,22 @@ async function threadView(ctx: QueryCtx, id: string, limit: number): Promise<Vie
   const taskId = ctx.db.normalizeId("tasks", id);
   const task = taskId ? await ctx.db.get(taskId) : null;
   if (!task) return fail(404, `task ${id} not found`);
-  const messages = await ctx.db
-    .query("messages")
-    .withIndex("by_task", (q) => q.eq("task", task._id))
-    .order("asc")
-    .take(limit);
+  // The whole thread: the root task's messages plus every manager task working in it (spec 09).
+  const root = task.thread ?? task._id;
+  const [threaded, own] = await Promise.all([
+    ctx.db
+      .query("messages")
+      .withIndex("by_thread", (q) => q.eq("thread", root))
+      .order("asc")
+      .take(limit),
+    ctx.db
+      .query("messages")
+      .withIndex("by_task", (q) => q.eq("task", root))
+      .order("asc")
+      .take(limit), // rows written before messages carried `thread`
+  ]);
+  const byId = new Map([...threaded, ...own].map((m) => [m._id, m]));
+  const messages = [...byId.values()].sort((a, b) => a.created_at - b.created_at || a.seq - b.seq).slice(0, limit);
   const data = {
     task: { id: task._id, role: task.role, kind: task.kind, status: task.status, brief: task.brief, chain_id: task.chain_id },
     messages: messages.map((m) => ({

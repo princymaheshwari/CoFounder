@@ -1,4 +1,4 @@
-import type { Role, TaskStatus } from "./types";
+import type { Role, TaskKind, TaskStatus } from "./types";
 
 // Routing and graph limits (spec 05, CLAUDE.md invariant 8). Pure, no I/O.
 
@@ -40,12 +40,14 @@ export const AWAITING_REPLY: readonly TaskStatus[] = ["assigned", "repairing"];
 export const CLOSED_STATUSES: readonly TaskStatus[] = ["done", "failed", "cancelled"];
 
 // What checkStuckTasks does with a task: nudge once, then escalate. A repair that goes unanswered escalates directly.
+// Ladder tasks (spec 09: issue, package) get one attempt per level and climb at the deadline, without a nudge.
 export function deadlineAction(
-  task: { status: TaskStatus; deadline: number; nudged?: boolean },
+  task: { status: TaskStatus; deadline: number; nudged?: boolean; kind?: TaskKind },
   now: number,
 ): "nudge" | "escalate" | null {
   if (task.deadline > now) return null;
-  if (task.status === "assigned") return task.nudged ? "escalate" : "nudge";
+  const ladder = task.kind === "issue" || task.kind === "package";
+  if (task.status === "assigned") return task.nudged || ladder ? "escalate" : "nudge";
   if (task.status === "repairing") return "escalate";
   return null;
 }

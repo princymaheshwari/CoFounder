@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as audit from "../audit.js";
 import type * as channels from "../channels.js";
 import type * as co from "../co.js";
 import type * as creao_callback from "../creao/callback.js";
@@ -21,6 +22,7 @@ import type * as dispatcher from "../dispatcher.js";
 import type * as gate from "../gate.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as inbox from "../inbox.js";
 import type * as issues from "../issues.js";
 import type * as lib_catalog from "../lib/catalog.js";
 import type * as lib_co from "../lib/co.js";
@@ -45,6 +47,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  audit: typeof audit;
   channels: typeof channels;
   co: typeof co;
   "creao/callback": typeof creao_callback;
@@ -58,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   gate: typeof gate;
   health: typeof health;
   http: typeof http;
+  inbox: typeof inbox;
   issues: typeof issues;
   "lib/catalog": typeof lib_catalog;
   "lib/co": typeof lib_co;

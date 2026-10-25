@@ -72,7 +72,8 @@ export default defineSchema({
   messages: defineTable({
     room: v.id("rooms"),
     seq: v.number(), // per-channel counter from rooms.next_seq
-    task: v.optional(v.id("tasks")), // the thread
+    task: v.optional(v.id("tasks")), // the task that wrote or received it
+    thread: v.optional(v.id("tasks")), // the thread root it appears under (a ladder task writes into its employee's thread)
     sender_kind: vSenderKind,
     sender_name: v.string(),
     sender_role: v.optional(vRole),
@@ -83,7 +84,8 @@ export default defineSchema({
     created_at: v.number(),
   })
     .index("by_room_seq", ["room", "seq"])
-    .index("by_task", ["task"]),
+    .index("by_task", ["task"])
+    .index("by_thread", ["thread"]),
 
   events: defineTable({
     type: v.string(),
@@ -111,6 +113,8 @@ export default defineSchema({
     deadline: v.number(),
     nudged: v.optional(v.boolean()), // the one deadline nudge was sent (spec 05)
     mode: vTaskMode,
+    thread: v.optional(v.id("tasks")), // thread root when not the task itself (spec 09 manager tasks)
+    issue: v.optional(v.id("issues")), // the issue an issue/package task works on (spec 09)
     created_at: v.number(),
     updated_at: v.number(),
   })
@@ -131,11 +135,15 @@ export default defineSchema({
     evidence: v.array(v.string()),
     status: vIssueStatus,
     resolution: v.optional(v.string()),
+    handler_task: v.optional(v.id("tasks")), // the manager task working on it (spec 09)
+    package_task: v.optional(v.id("tasks")), // the Cofounder's package task, once it climbs to the founder
+    actions: v.optional(v.array(v.id("actions"))), // escalated actions awaiting the founder's decision
     created_at: v.number(),
   })
     .index("by_status", ["status"])
     .index("by_task", ["task"])
-    .index("by_chain", ["chain_id"]),
+    .index("by_chain", ["chain_id"])
+    .index("by_handler_task", ["handler_task"]),
 
   actions: defineTable({
     task: v.id("tasks"),

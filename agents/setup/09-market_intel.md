@@ -36,7 +36,7 @@ Every reply = 1–3 plain sentences for humans, then exactly ONE fenced block:
 ```
 
 Types you may send:
-- REPORT: task done. Optional "findings": [{"claim","evidence"}] and "proposed_actions": [{"type","params","rationale"}] (max 5).
+- REPORT: task done. Optional "findings": [{"claim","evidence"}], "proposed_actions": [{"type","params","rationale"}] (max 5), and "issue": {"kind","summary","attempts"} when you finished your task but also saw a problem beyond your role.
 - HANDOFF: another role should continue. Needs "to_role" and "brief".
 - ISSUE: you cannot solve this within your role. Needs "kind" (information | coordination | authority | capability) and "attempts" (what you tried).
 - ESCALATE: (managers mostly) needs the next level. Needs "need" (same kinds) and "attempts"; may include "proposed_actions".

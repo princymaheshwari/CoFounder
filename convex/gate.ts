@@ -29,7 +29,7 @@ const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 // The current period's row for a budget scope, created from config.budget_limits on first use.
 // Reading and creating inside the gate's transaction keeps concurrent gates from double-spending.
-async function currentBudget(ctx: MutationCtx, scope: string, now: number): Promise<Doc<"budgets"> | null> {
+export async function currentBudget(ctx: MutationCtx, scope: string, now: number): Promise<Doc<"budgets"> | null> {
   const limits = await getConfig<BudgetLimits>(ctx, "budget_limits", CONFIG_DEFAULTS.budget_limits);
   const def = limits[scope];
   if (!def) return null;
@@ -67,7 +67,7 @@ async function decisionStats(ctx: MutationCtx, type: ActionType): Promise<GateSt
 }
 
 // The customer an action concerns: params.customer_id, else the ticket's customer.
-async function customerFor(ctx: MutationCtx, params: Record<string, unknown>): Promise<Doc<"customers"> | null> {
+export async function customerFor(ctx: MutationCtx, params: Record<string, unknown>): Promise<Doc<"customers"> | null> {
   const customerId = typeof params.customer_id === "string" ? ctx.db.normalizeId("customers", params.customer_id) : null;
   if (customerId) return await ctx.db.get(customerId);
   const ticketId = typeof params.ticket_id === "string" ? ctx.db.normalizeId("tickets", params.ticket_id) : null;
@@ -87,7 +87,8 @@ async function gateConfig(ctx: MutationCtx): Promise<GateConfig> {
 export type GateOutcome = { effect: GateEffect; reason: string; rule_id?: Id<"rules"> };
 
 // Decides one action. Callable from any mutation (spec 09 gates ESCALATE actions); a no-op once gated.
-export async function gateAction(ctx: MutationCtx, actionId: Id<"actions">): Promise<GateOutcome | null> {
+// `inbox: false` skips the per-action founder inbox item: spec 09 packages escalated actions into one decision.
+export async function gateAction(ctx: MutationCtx, actionId: Id<"actions">, opts: { inbox?: boolean } = {}): Promise<GateOutcome | null> {
   const action = await ctx.db.get(actionId);
   if (!action || !GATEABLE.includes(action.status)) return null;
   const task = await ctx.db.get(action.task);
@@ -170,6 +171,7 @@ export async function gateAction(ctx: MutationCtx, actionId: Id<"actions">): Pro
       if (entry.executor === "nessie") await ctx.scheduler.runAfter(0, internal.nessie.executeMoneyAction, { actionId });
       break;
     case "escalate": {
+      if (opts.inbox === false) break;
       const lines = [
         `${action.role} proposes ${action.type}${amount !== undefined ? ` for ${dollars(amount)}` : ""}.`,
         `Why: ${action.rationale}`,

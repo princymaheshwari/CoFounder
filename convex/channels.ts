@@ -5,12 +5,15 @@ import type { MutationCtx } from "./_generated/server";
 // so concurrent appends never share a [room, seq] (Convex retries the conflicting mutation).
 export async function appendMessage(
   ctx: MutationCtx,
-  m: Omit<Doc<"messages">, "_id" | "_creationTime" | "seq" | "created_at">,
+  m: Omit<Doc<"messages">, "_id" | "_creationTime" | "seq" | "created_at" | "thread">,
 ): Promise<Id<"messages">> {
   const room = await ctx.db.get(m.room);
   if (!room) throw new Error(`room ${m.room} not found`);
+  // A task's messages appear under its thread root: itself, or the employee thread a manager task works in.
+  const task = m.task ? await ctx.db.get(m.task) : null;
+  const thread = task ? (task.thread ?? task._id) : undefined;
   await ctx.db.patch(room._id, { next_seq: room.next_seq + 1 });
-  return await ctx.db.insert("messages", { ...m, seq: room.next_seq, created_at: Date.now() });
+  return await ctx.db.insert("messages", { ...m, ...(thread ? { thread } : {}), seq: room.next_seq, created_at: Date.now() });
 }
 
 export async function audit(

@@ -211,15 +211,19 @@ describe("replies", () => {
     expect((await getTask(t, taskId)).status).toBe("escalated");
     const [issue] = await issuesOf(t, taskId);
     const replyId = (await thread(t, taskId))[1]._id;
+    // Spec 09: the issue climbs at once to a Customer manager task working in Support's thread.
+    const mgr = (await allTasks(t)).find((x) => x.role === "customer_manager")!;
     expect(issue).toMatchObject({
       kind: "coordination",
-      level: "employee",
+      level: "manager",
       raised_by_role: "support",
       to_role: "customer_manager",
-      status: "open",
+      status: "escalated",
+      handler_task: mgr._id,
       attempts: ["Refunded my own ticket under R7"],
       evidence: [replyId, "ticket:1"],
     });
+    expect(mgr).toMatchObject({ kind: "issue", thread: taskId, issue: issue._id, room: (await getTask(t, taskId)).room });
     expect((await transitions(t, taskId)).at(-1)).toEqual(["replied", "escalated"]);
   });
 
@@ -355,10 +359,13 @@ describe("handoffs and graph limits", () => {
     await t.run((ctx) => ctx.db.patch(taskId, { hop: 3 }));
     await reply(t, taskId, { type: "HANDOFF", to_role: "ledger", brief: "Check duplicates." });
     expect((await getTask(t, taskId)).status).toBe("escalated");
-    expect(await allTasks(t)).toHaveLength(1);
+    // No ledger task: the refused handoff climbs to the Cofounder in Support's thread.
+    const tasks = await allTasks(t);
+    expect(tasks.map((x) => x.role).sort()).toEqual(["cofounder", "support"]);
     const [issue] = await issuesOf(t, taskId);
-    expect(issue).toMatchObject({ kind: "coordination", to_role: "cofounder" });
+    expect(issue).toMatchObject({ kind: "coordination", to_role: "cofounder", level: "manager" });
     expect(issue.summary).toMatch(/already has 3 hops/);
+    expect(tasks.find((x) => x.role === "cofounder")).toMatchObject({ kind: "issue", thread: taskId, hop: 3 });
   });
 
   test.each([
@@ -368,7 +375,7 @@ describe("handoffs and graph limits", () => {
     const t = setup();
     const taskId = await openTask(t);
     await reply(t, taskId, { type: "HANDOFF", to_role: toRole, brief: "Do it." });
-    expect(await allTasks(t)).toHaveLength(1);
+    expect((await allTasks(t)).map((x) => x.role).sort()).toEqual(["customer_manager", "support"]);
     const [issue] = await issuesOf(t, taskId);
     expect(issue).toMatchObject({ kind: "coordination", to_role: "customer_manager" });
     expect(issue.summary).toContain(why);
@@ -413,7 +420,7 @@ describe("deadlines", () => {
     vi.setSystemTime((await getTask(t, taskId)).deadline + 1);
     expect(await t.mutation(internal.tasks.checkStuckTasks, {})).toEqual({ nudged: 0, escalated: 1 });
     expect((await getTask(t, taskId)).status).toBe("escalated");
-    expect((await issuesOf(t, taskId))[0]).toMatchObject({ kind: "capability", to_role: "customer_manager", level: "employee" });
+    expect((await issuesOf(t, taskId))[0]).toMatchObject({ kind: "capability", to_role: "customer_manager", level: "manager", status: "escalated" });
     expect(await transitions(t, taskId)).toEqual([
       [null, "queued"],
       ["assigned", "assigned"],

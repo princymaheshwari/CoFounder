@@ -52,6 +52,13 @@ const decisionPackage = z.object({
   recommendation: text,
 });
 
+// A REPORT may also raise an issue: the agent finished its task but saw a problem beyond its role (spec 09).
+const reportIssue = z.object({
+  kind: z.enum(ISSUE_KINDS),
+  summary: z.string().min(1).max(MAX_SUMMARY),
+  attempts: z.array(z.string()).min(1),
+});
+
 // Unknown top-level fields are ignored (stripped).
 const envelopeSchema = z.object({
   type: z.enum(MESSAGE_TYPES),
@@ -67,6 +74,7 @@ const envelopeSchema = z.object({
   attempts: z.array(z.string()).optional(),
   refs: z.array(z.string()).optional(),
   package: decisionPackage.optional(),
+  issue: reportIssue.optional(),
   confidence: z.number().min(0).max(1).optional(),
 });
 
@@ -194,8 +202,9 @@ export function parseEnvelope(
       break;
   }
 
-  // Only REPORT, ESCALATE and DECISION carry actions; elsewhere they are ignored.
+  // Only REPORT, ESCALATE and DECISION carry actions, and only REPORT carries an issue; elsewhere they are ignored.
   if (!ACTION_CARRIERS.has(env.type)) delete env.proposed_actions;
+  if (env.type !== "REPORT") delete env.issue;
 
   for (const [i, action] of (env.proposed_actions ?? []).entries()) {
     const params = ACTION_PARAMS[action.type].safeParse(action.params);

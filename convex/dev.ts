@@ -38,6 +38,31 @@ export const seedSupportTicket = internalMutation({
   },
 });
 
+// Dev helper (spec 09): a support_ticket event for an existing (e.g. Nessie-seeded) ticket, routed like a real one.
+//   npx convex run dev:ticketEvent '{"ticketId":"…"}'
+export const ticketEvent = internalMutation({
+  args: { ticketId: v.id("tickets") },
+  returns: v.object({ taskId: v.id("tasks"), messageId: v.id("messages") }),
+  handler: async (ctx, { ticketId }) => {
+    const ticket = await ctx.db.get(ticketId);
+    if (!ticket) throw new Error(`ticket ${ticketId} not found`);
+    const eventId = await ctx.db.insert("events", {
+      type: "support_ticket",
+      payload: {
+        ticket: ticketId,
+        brief: `Handle ticket ${ticketId}: "${ticket.subject}" ${ticket.body}`,
+        data_hints: [`co data ticket --id ${ticketId}`, ...(ticket.customer ? [`co data customer --id ${ticket.customer}`] : []), "co data tickets"],
+      },
+      source: "seed",
+      processed: false,
+      created_at: Date.now(),
+    });
+    const created = await taskFromEvent(ctx, eventId);
+    if (!created) throw new Error(`event ${eventId} was already processed`);
+    return created;
+  },
+});
+
 // Dev helper (spec 06): a throwaway task + signed token to call /co/* by hand, e.g.
 //   npx convex run dev:coSmokeToken '{"role":"support"}'  →  python3 skills/co/co.py --token <token> data company
 // No run is started. Remove the task with dev:dropCoSmokeTask.

@@ -2,9 +2,9 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { env, internalAction, internalMutation, internalQuery, type ActionCtx, type MutationCtx } from "./_generated/server";
-import { audit, getConfig } from "./channels";
+import { appendMessage, audit, getConfig } from "./channels";
 import { DEFAULT_LEVEL_TIMEOUT_MS, assign, rerun, type HandoffSource } from "./dispatcher";
-import { raiseIssue, resolveIssues } from "./issues";
+import { climbFromLadderTask, handOffIssues, isLadderTask, onPackage, packageFallback, raiseIssue, resolveIssues, settleHandledIssues } from "./issues";
 import type { Envelope, ParseResult, ProposedAction } from "./lib/envelope";
 import { AWAITING_REPLY, CLOSED_STATUSES, checkHandoff, deadlineAction, routeEvent, type HandoffRejection } from "./lib/routing";
 import { hashToken, verifyTaskToken } from "./lib/tokens";
@@ -16,7 +16,7 @@ import { vRole, type Role, type RunStatus, type TaskKind, type TaskMode, type Ta
 const NUDGE_NOTE = "No reply arrived before the deadline. Reply now with one cofounder envelope for this task.";
 const MAX_BRIEF = 2_000;
 
-async function transition(
+export async function transition(
   ctx: MutationCtx,
   task: Doc<"tasks">,
   to: TaskStatus,
@@ -50,7 +50,7 @@ async function agentFor(ctx: MutationCtx, role: Role): Promise<Doc<"agents"> | n
     .unique();
 }
 
-async function insertTask(
+export async function insertTask(
   ctx: MutationCtx,
   t: {
     role: Role;
@@ -63,6 +63,8 @@ async function insertTask(
     mode: TaskMode;
     event?: Id<"events">;
     parent_task?: Id<"tasks">;
+    thread?: Id<"tasks">; // spec 09: a manager task writes into the employee's thread
+    issue?: Id<"issues">;
   },
 ): Promise<Id<"tasks">> {
   const now = Date.now();
@@ -78,7 +80,7 @@ async function insertTask(
     actor: "dispatcher",
     kind: "task_status",
     ref: taskId,
-    detail: { from: null, to: "queued", trigger: t.parent_task ? "handoff" : "event", chain: t.chain_id, hop: t.hop, role: t.role, parent: t.parent_task ?? null },
+    detail: { from: null, to: "queued", trigger: t.parent_task ? (t.kind === "handoff" ? "handoff" : t.kind) : "event", chain: t.chain_id, hop: t.hop, role: t.role, parent: t.parent_task ?? null },
   });
   return taskId;
 }
@@ -174,7 +176,7 @@ const REJECTION_TEXT: Record<HandoffRejection | "no_agent", string> = {
 // ---------------------------------------------------------------- agent replies
 
 // Persists proposed actions; spec 11 labels each one and spec 07 gates it.
-async function proposeActions(ctx: MutationCtx, task: Doc<"tasks">, actions: ProposedAction[]): Promise<Id<"actions">[]> {
+export async function proposeActions(ctx: MutationCtx, task: Doc<"tasks">, actions: ProposedAction[]): Promise<Id<"actions">[]> {
   const ids: Id<"actions">[] = [];
   for (const action of actions) {
     const actionId = await ctx.db.insert("actions", {
@@ -204,6 +206,25 @@ async function finishWithActions(ctx: MutationCtx, task: Doc<"tasks">, env: Enve
   for (const actionId of actionIds) await ctx.scheduler.runAfter(0, internal.gate.evaluateGate, { actionId });
 }
 
+// A cross-department handoff is announced in #leadership (no run), so the conversation is visible there (spec 09).
+async function leadershipNotice(ctx: MutationCtx, task: Doc<"tasks">, toRole: Role, childId: Id<"tasks">, summary: string): Promise<void> {
+  const [from, to] = [await agentFor(ctx, task.role), await agentFor(ctx, toRole)];
+  if (!from || !to || from.department === to.department) return;
+  const leadership = await ctx.db
+    .query("rooms")
+    .withIndex("by_name", (q) => q.eq("name", "#leadership"))
+    .unique();
+  if (!leadership) return;
+  const target = await ctx.db.get(childId);
+  const targetRoom = target ? (await ctx.db.get(target.room))?.name : undefined;
+  await appendMessage(ctx, {
+    room: leadership._id,
+    sender_kind: "system",
+    sender_name: "Dispatcher",
+    text: `[Dispatcher] ${from.display_name} handed task ${task._id} off to ${to.display_name}${targetRoom ? ` in ${targetRoom}` : ""} (task ${childId}): ${summary}`,
+  });
+}
+
 // Acts on a valid envelope from a task in `replied` (spec 05 transitions).
 export async function routeEnvelope(
   ctx: MutationCtx,
@@ -211,9 +232,32 @@ export async function routeEnvelope(
   env: Envelope,
   messageId: Id<"messages">,
 ): Promise<void> {
+  // Spec 09: a package task answers with the founder package; anything else sends the issue to the inbox as is.
+  if (task.kind === "package") {
+    if (env.type === "REPORT") return await onPackage(ctx, task, env, messageId);
+    await transition(ctx, task, "escalated", `PACKAGE_${env.type}`, { messageId });
+    const issue = task.issue ? await ctx.db.get(task.issue) : null;
+    if (issue) await packageFallback(ctx, issue, `the Cofounder sent ${env.type} instead of a package: ${env.summary}`);
+    return;
+  }
   switch (env.type) {
-    case "REPORT":
-      return await finishWithActions(ctx, task, env, messageId);
+    case "REPORT": {
+      await finishWithActions(ctx, task, env, messageId);
+      // A manager's REPORT on an issue settles it (spec 09).
+      if (task.kind === "issue") await settleHandledIssues(ctx, task, env.summary);
+      // The task is done, but the agent saw a problem beyond its role: it climbs like an ISSUE. Not handed back
+      // to the employee (fromEnvelope false), since the task itself is already finished.
+      if (env.issue) {
+        const after = (await ctx.db.get(task._id))!;
+        await raiseIssue(ctx, after, {
+          kind: env.issue.kind,
+          summary: env.issue.summary,
+          attempts: env.issue.attempts,
+          evidence: [messageId, ...(env.refs ?? [])],
+        });
+      }
+      return;
+    }
 
     case "HANDOFF": {
       const toRole = env.to_role!; // the parser requires to_role and brief on HANDOFF
@@ -227,6 +271,8 @@ export async function routeEnvelope(
       });
       if (child.ok) {
         await transition(ctx, task, "done", "HANDOFF", { messageId, child: child.taskId, toRole });
+        if (task.kind === "issue") await handOffIssues(ctx, task, toRole, child.taskId);
+        await leadershipNotice(ctx, task, toRole, child.taskId, env.summary);
         return;
       }
       // A handoff the graph limits refuse becomes a coordination ISSUE; past the hop limit it goes to the Cofounder.
@@ -249,6 +295,8 @@ export async function routeEnvelope(
         summary: env.summary,
         attempts: env.attempts ?? [],
         evidence: [messageId, ...(env.refs ?? [])],
+        proposedActions: env.proposed_actions ?? [],
+        fromEnvelope: true,
       });
       return;
 
@@ -262,7 +310,9 @@ export async function routeEnvelope(
       // A manager or Cofounder decision resolves the issue it answers: on this task or the task it was raised on.
       const resolved = await resolveIssues(ctx, task.parent_task ? [task._id, task.parent_task] : [task._id], env.summary, task.role);
       await audit(ctx, { actor: task.role, kind: "decision", ref: task._id, detail: { messageId, resolved } });
-      return await finishWithActions(ctx, task, env, messageId);
+      await finishWithActions(ctx, task, env, messageId);
+      if (task.kind === "issue") await settleHandledIssues(ctx, task, env.summary);
+      return;
     }
 
     case "ASSIGN":
@@ -298,6 +348,7 @@ export async function onAgentReply(
       await rerun(ctx, task._id, "repair", parsed.error);
       return;
     }
+    if (isLadderTask(task)) return await climbFromLadderTask(ctx, task, "invalid_after_repair", "sent an invalid envelope twice");
     const errors = await envelopeErrors(ctx, task._id);
     await transition(ctx, task, "escalated", "invalid_after_repair", { messageId, error: parsed.error });
     await raiseIssue(ctx, task, {
@@ -322,6 +373,7 @@ export async function onRunFailed(
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task || !AWAITING_REPLY.includes(task.status) || task.creao_run_id !== runId) return;
+  if (isLadderTask(task)) return await climbFromLadderTask(ctx, task, `run_${status}`, `run ended as ${status}${errorCode ? ` (${errorCode})` : ""}`);
   const failed = await transition(ctx, task, "failed", `run_${status}`, { runId, errorCode });
   await raiseIssue(ctx, failed, {
     kind: "capability",
@@ -352,6 +404,10 @@ export const checkStuckTasks = internalMutation({
           await transition(ctx, task, "assigned", "deadline_nudge");
           await rerun(ctx, task._id, "nudge", NUDGE_NOTE);
           nudged++;
+        } else if (next === "escalate" && isLadderTask(task)) {
+          // Spec 09: each ladder level gets one attempt within its time budget, then climbs.
+          await climbFromLadderTask(ctx, task, "deadline", "timed out");
+          escalated++;
         } else if (next === "escalate") {
           const out = await transition(ctx, task, "escalated", "deadline");
           await raiseIssue(ctx, out, {
