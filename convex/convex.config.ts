@@ -15,6 +15,8 @@ const app = defineApp({
     APIFY_TOKEN: v.optional(v.string()),
     APIFY_WEBHOOK_TOKEN: v.optional(v.string()),
     CO_TOKEN_SECRET: v.optional(v.string()),
+    // Overrides https://ai-gateway.convex.dev (spec 11 sets it to a broken URL to test the Jev failure path).
+    AI_GATEWAY_URL: v.optional(v.string()),
   },
 });
 

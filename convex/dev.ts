@@ -4,6 +4,8 @@ import type { Id } from "./_generated/dataModel";
 import { env, internalAction, internalMutation } from "./_generated/server";
 import { TOKEN_TTL_MS, hashToken, signTaskToken } from "./lib/tokens";
 import { gateAction } from "./gate";
+import { jevDecide } from "./labels";
+import { jevState, questionsFor } from "./lib/labelSpecs";
 import { vActionType, vRole, vTaskStatus } from "./lib/types";
 import { taskFromEvent } from "./tasks";
 
@@ -142,19 +144,21 @@ export const dropCoSmokeTask = internalMutation({
   },
 });
 
-// Dev helper (spec 08): propose an action on a task and run it through the real gate, e.g.
-//   npx convex run dev:proposeAction '{"taskId":"…","type":"refund","params":{"customer_id":"…","amount_cents":3500},
-//     "labels":{"refund_reason":{"value":"billing_error","confidence":0.95}}}'
-// `labels` stands in for Jev until spec 11. An allowed Nessie action is executed by the scheduled executeMoneyAction.
+// Dev helper (spec 08, 11): propose an action on a task and run it through labeling and the real gate, e.g.
+//   npx convex run dev:proposeAction '{"taskId":"…","type":"refund","params":{"customer_id":"…","amount_cents":3500}}'
+// Without `labels`, Jev labels it and the gate runs after (effect null here; read the action). With `labels`
+// (e.g. {"refund_reason":{"value":"billing_error","confidence":0.95}}) Jev is skipped and the gate runs now.
+// An allowed Nessie action is executed by the scheduled executeMoneyAction.
 export const proposeAction = internalMutation({
   args: {
     taskId: v.id("tasks"),
     type: vActionType,
     params: v.any(),
+    rationale: v.optional(v.string()),
     labels: v.optional(v.record(v.string(), v.object({ value: v.union(v.string(), v.boolean(), v.number()), confidence: v.number() }))),
   },
   returns: v.object({ actionId: v.id("actions"), effect: v.union(v.string(), v.null()), reason: v.union(v.string(), v.null()) }),
-  handler: async (ctx, { taskId, type, params, labels }) => {
+  handler: async (ctx, { taskId, type, params, rationale, labels }) => {
     const task = await ctx.db.get(taskId);
     if (!task) throw new Error(`task ${taskId} not found`);
     const actionId = await ctx.db.insert("actions", {
@@ -163,12 +167,55 @@ export const proposeAction = internalMutation({
       role: task.role,
       type,
       params,
-      rationale: "[dev] proposed by hand",
+      rationale: rationale ?? "[dev] proposed by hand",
       ...(labels ? { labels } : {}),
       status: "proposed",
       created_at: Date.now(),
     });
+    if (!labels) {
+      await ctx.scheduler.runAfter(0, internal.labels.labelActions, { actionIds: [actionId], then: { kind: "gate" } });
+      return { actionId, effect: null, reason: null };
+    }
     const outcome = await gateAction(ctx, actionId);
     return { actionId, effect: outcome?.effect ?? null, reason: outcome?.reason ?? null };
+  },
+});
+
+// Dev helper: remove a hand-proposed action and its founder inbox items (only "[dev]" rationales).
+export const dropDevAction = internalMutation({
+  args: { actionId: v.id("actions") },
+  returns: v.number(),
+  handler: async (ctx, { actionId }) => {
+    const action = await ctx.db.get(actionId);
+    if (!action || !action.rationale.startsWith("[dev")) throw new Error(`action ${actionId} is not a dev action`);
+    let removed = 0;
+    for (const item of await ctx.db.query("founder_inbox").withIndex("by_status", (q) => q.eq("status", "open")).take(500)) {
+      if (item.ref === actionId) {
+        await ctx.db.delete(item._id);
+        removed++;
+      }
+    }
+    await ctx.db.delete(actionId);
+    return removed;
+  },
+});
+
+// Dev helper (spec 11): ask Jev about an action without storing anything; returns the labels, Jev's raw
+// answers and the cost. `ticket` stands in for the ticket a refund cites.
+//   npx convex run dev:probeJev '{"type":"refund","params":{"amount_cents":3500},"rationale":"Charged twice",
+//     "ticket":{"subject":"Charged twice","body":"I was billed $35 twice this month."}}'
+export const probeJev = internalAction({
+  args: {
+    type: vActionType,
+    params: v.any(),
+    rationale: v.string(),
+    ticket: v.optional(v.object({ subject: v.string(), body: v.string() })),
+    findings: v.optional(v.array(v.object({ claim: v.string(), evidence: v.string(), evidence_text: v.string() }))),
+  },
+  returns: v.any(),
+  handler: async (_ctx, { type, params, rationale, ticket, findings }) => {
+    const questions = questionsFor(type, Boolean(findings?.length));
+    const state = jevState({ action: { type, role: "dev", params, rationale }, tickets: ticket ? [ticket] : [], findings });
+    return { questions: Object.keys(questions), ...(await jevDecide(questions, state)) };
   },
 });

@@ -9,6 +9,7 @@ import { extractEnvelopeBlock } from "../convex/lib/envelope";
 import { TOKEN_TTL_MS, signTaskToken } from "../convex/lib/tokens";
 import type { Role } from "../convex/lib/types";
 import posted from "../convex/creao/__fixtures__/post-run-202.json";
+import { FakeJev, isJev } from "./fakes/jev";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const SECRET = "test-secret";
@@ -23,6 +24,7 @@ type T = ReturnType<typeof setup>;
 
 // A Creao stand-in: every POST /runs starts a new run (run-1, run-2, …).
 let posts: { body: Record<string, unknown> }[] = [];
+let jev: FakeJev;
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubEnv("CREAO_API_KEY", "capi_test");
@@ -30,9 +32,11 @@ beforeEach(() => {
   vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
   vi.stubEnv("CO_TOKEN_SECRET", SECRET);
   posts = [];
+  jev = new FakeJev();
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (_url: string, init: RequestInit) => {
+    vi.fn(async (url: string, init: RequestInit) => {
+      if (isJev(url)) return jev.fetch(url, init);
       posts.push({ body: JSON.parse(init.body as string) as Record<string, unknown> });
       return new Response(JSON.stringify({ ...posted, id: `run-${posts.length}` }), { status: 202 });
     }),

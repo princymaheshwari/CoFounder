@@ -37,6 +37,7 @@ const R7: GateRule = {
   support: 3,
 };
 const billing = { refund_reason: { value: "billing_error", confidence: 0.95 } };
+const noCommitment = { makes_commitment: { value: false, confidence: 0.9 } };
 
 function refund(amount: number, extra: Partial<GateAction> = {}): GateAction {
   return {
@@ -90,7 +91,10 @@ const CASES: Case[] = [
   ["label_error escalates", input(refund(3500, { label_error: "jev timeout" })), { effect: "escalate", reason: "labels:low_confidence" }],
   ["a label below 0.8 confidence escalates", input(refund(3500, { labels: { refund_reason: { value: "billing_error", confidence: 0.79 } } })), { effect: "escalate", reason: "labels:low_confidence" }],
   ["a label at exactly 0.8 passes", input(refund(3500, { labels: { refund_reason: { value: "billing_error", confidence: 0.8 } } })), { effect: "allow", rule_id: "r7" }],
-  ["no labels at all passes the label check", input(action("reply_customer"), { rules: [rule("rc", { action_type: "reply_customer" })] }), { effect: "allow", rule_id: "rc", debits: [] }],
+  ["no labels pass for a type Jev asks nothing about", input(action("file_bug"), { rules: [rule("fb", { action_type: "file_bug" })] }), { effect: "allow", rule_id: "fb", debits: [] }],
+  ["a required label that is missing escalates", input(action("reply_customer"), { rules: [rule("rc", { action_type: "reply_customer" })] }), { effect: "escalate", reason: "labels:low_confidence" }],
+  ["a refund without refund_reason escalates", input(refund(3500, { labels: undefined })), { effect: "escalate", reason: "labels:low_confidence" }],
+  ["reply_customer with its label passes", input(action("reply_customer", { labels: noCommitment }), { rules: [rule("rc", { action_type: "reply_customer" })] }), { effect: "allow", rule_id: "rc", debits: [] }],
   // 3. Novelty
   ["an action type the founder never approved escalates", input(refund(3500), { stats: { approvedCount: 0, maxApprovedCents: 0, counterparties: [] } }), { effect: "escalate", reason: "novelty:new_type" }],
   ["a bill from an unseen merchant escalates", input(action("pay_bill", { amount_cents: 1000, counterparty: "NewVendor" }), { rules: [rule("pb", { action_type: "pay_bill" })] }), { effect: "escalate", reason: "novelty:new_counterparty" }],
@@ -116,9 +120,9 @@ const CASES: Case[] = [
   ["a proposed (inactive) rule does not apply", input(refund(3500), { rules: [{ ...R7, status: "proposed" }] }), { effect: "escalate", reason: "default:no_rule" }],
   ["a rule for another action type does not apply", input(refund(3500), { rules: [{ ...R7, action_type: "pay_bill" }] }), { effect: "escalate", reason: "default:no_rule" }],
   // Absence mode
-  ["away: an allow rule with < 5 supporting decisions queues", input(action("reply_customer"), { founderStatus: "away", rules: [rule("rc", { action_type: "reply_customer", support: 4 })] }), { effect: "queue", reason: "absence:low_support", rule_id: "rc" }],
+  ["away: an allow rule with < 5 supporting decisions queues", input(action("reply_customer", { labels: noCommitment }), { founderStatus: "away", rules: [rule("rc", { action_type: "reply_customer", support: 4 })] }), { effect: "queue", reason: "absence:low_support", rule_id: "rc" }],
   ["away: a well-supported money allow queues", input(refund(3500), { founderStatus: "away", rules: [{ ...R7, support: 6 }] }), { effect: "queue", reason: "absence:money", rule_id: "r7", debits: [] }],
-  ["away: a well-supported non-money allow still allows", input(action("reply_customer"), { founderStatus: "away", rules: [rule("rc", { action_type: "reply_customer", support: 5 })] }), { effect: "allow", rule_id: "rc" }],
+  ["away: a well-supported non-money allow still allows", input(action("reply_customer", { labels: noCommitment }), { founderStatus: "away", rules: [rule("rc", { action_type: "reply_customer", support: 5 })] }), { effect: "allow", rule_id: "rc" }],
   ["away: escalations still escalate", input(refund(3500), { founderStatus: "away", customer: { tenure_days: 5 } }), { effect: "escalate", reason: "default:no_rule" }],
   // Cofounder authority (flow B): company rule for marketing_spend within $200 when the Cofounder decides.
   ["cofounder may approve marketing spend within $200", input(action("marketing_spend", { role: "cofounder", department: "leadership", params: { channel: "x-ads" }, amount_cents: 15_000, counterparty: "x-ads" }), { budgets: [{ scope: "company:marketing", limit_cents: 50_000, spent_cents: 0 }], stats: { approvedCount: 2, maxApprovedCents: 20_000, counterparties: ["x-ads"] }, rules: [rule("cf", { action_type: "marketing_spend", conditions: [{ field: "amount_cents", op: "<=", value: 20_000 }, { field: "role", op: "==", value: "cofounder" }] })] }), { effect: "allow", rule_id: "cf", debits: [{ scope: "company:marketing", cents: 15_000 }] }],
@@ -340,7 +344,7 @@ describe("evaluateGate", () => {
         created_at: Date.now(),
       });
     });
-    const id = await propose(t, w.taskId, "publish_post", { channel: "linkedin", text: "hi" });
+    const id = await propose(t, w.taskId, "publish_post", { channel: "linkedin", text: "hi" }, { labels: { mentions_pricing: { value: false, confidence: 0.95 }, mentions_competitor: { value: false, confidence: 0.95 } } });
     expect(await t.mutation(internal.gate.evaluateGate, { actionId: id })).toMatchObject({ effect: "deny", reason: "rule:deny" });
     expect(await getAction(t, id)).toMatchObject({ status: "denied" });
     const msgs = await t.run((ctx) => ctx.db.query("messages").withIndex("by_task", (q) => q.eq("task", w.taskId)).collect());
@@ -350,7 +354,7 @@ describe("evaluateGate", () => {
   test("an unknown action type for the founder escalates novelty:new_type", async () => {
     const t = setup();
     const w = await world(t);
-    const id = await propose(t, w.taskId, "reply_customer", { ticket_id: "t1", body: "Sorry!" });
+    const id = await propose(t, w.taskId, "reply_customer", { ticket_id: "t1", body: "Sorry!" }, { labels: noCommitment });
     expect(await t.mutation(internal.gate.evaluateGate, { actionId: id })).toEqual({ effect: "escalate", reason: "novelty:new_type" });
   });
 

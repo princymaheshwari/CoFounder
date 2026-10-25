@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx } from "./_generated/server";
+import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { appendMessage, audit, getConfig } from "./channels";
 import { scheduleExecution } from "./executor";
 import { CATALOG } from "./lib/catalog";
@@ -67,7 +67,7 @@ async function decisionStats(ctx: MutationCtx, type: ActionType): Promise<GateSt
 }
 
 // The customer an action concerns: params.customer_id, else the ticket's customer.
-export async function customerFor(ctx: MutationCtx, params: Record<string, unknown>): Promise<Doc<"customers"> | null> {
+export async function customerFor(ctx: QueryCtx, params: Record<string, unknown>): Promise<Doc<"customers"> | null> {
   const customerId = typeof params.customer_id === "string" ? ctx.db.normalizeId("customers", params.customer_id) : null;
   if (customerId) return await ctx.db.get(customerId);
   const ticketId = typeof params.ticket_id === "string" ? ctx.db.normalizeId("tickets", params.ticket_id) : null;

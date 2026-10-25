@@ -1,4 +1,5 @@
 import { CATALOG } from "./catalog";
+import { requiredLabels } from "./labelSpecs";
 import type { ActionType, ConditionOp, Department, Effect, GateEffect, Role, RuleScopeLevel } from "./types";
 
 // The authority gate (spec 07, invariant 2): a pure function from facts to a decision. No I/O, no LLM.
@@ -111,8 +112,13 @@ export function evaluate(input: GateInput): GateResult {
   if (entry.money && amount !== undefined && amount > config.money_hard_cap_cents) return escalate("hard:cap");
   if (entry.money && budget && amount !== undefined && amount + budget.spent_cents > budget.limit_cents) return escalate("hard:budget");
 
-  // 2. Labels (no labels at all passes until spec 11 labels every action).
-  if (action.label_error || Object.values(action.labels ?? {}).some((l) => l.confidence < config.confidence_min)) {
+  // 2. Labels (spec 11): a Jev failure, a required label that is missing, or one below the confidence floor.
+  const labels = action.labels ?? {};
+  if (
+    action.label_error ||
+    requiredLabels(action.type).some((name) => !(name in labels)) ||
+    Object.values(labels).some((l) => l.confidence < config.confidence_min)
+  ) {
     return escalate("labels:low_confidence");
   }
 

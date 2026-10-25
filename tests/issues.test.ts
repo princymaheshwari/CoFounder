@@ -9,6 +9,7 @@ import { extractEnvelopeBlock } from "../convex/lib/envelope";
 import { deadlineAction } from "../convex/lib/routing";
 import type { Role } from "../convex/lib/types";
 import posted from "../convex/creao/__fixtures__/post-run-202.json";
+import { FakeJev, isJev } from "./fakes/jev";
 import { FakeNessie } from "./fakes/nessie";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -24,6 +25,7 @@ type T = ReturnType<typeof setup>;
 // Creao stand-in (every POST /runs starts run-N) and the fake Nessie, routed by host.
 let runs = 0;
 let nessie: FakeNessie;
+let jev: FakeJev;
 beforeEach(() => {
   vi.useFakeTimers();
   // Midday in Los Angeles, so draining timers never crosses into the next budget day.
@@ -35,9 +37,11 @@ beforeEach(() => {
   vi.stubEnv("NESSIE_API_KEY", "nessie_test");
   runs = 0;
   nessie = new FakeNessie();
+  jev = new FakeJev();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (isJev(url)) return jev.fetch(url, init);
       if (String(url).includes("nessieisreal")) return nessie.fetch(url, init);
       runs++;
       return new Response(JSON.stringify({ ...posted, id: `run-${runs}` }), { status: 202 });
@@ -233,7 +237,8 @@ describe("manager outcomes", () => {
     });
     const fileBug = { type: "file_bug", params: { title: "Double charge", body: "Oct 22", severity: "high" }, rationale: "Defect." };
     await reply(t, mgr._id, { type: "ESCALATE", need: "authority", attempts: ["Grouped tickets"], proposed_actions: [fileBug] });
-    expect((await t.run((ctx) => ctx.db.query("actions").collect()))[0]).toMatchObject({ type: "file_bug", status: "allowed" });
+    await drain(t); // Jev labels first (spec 11), then the gate decides (and the Executor starts)
+    expect((await t.run((ctx) => ctx.db.query("actions").collect()))[0]).toMatchObject({ type: "file_bug", gate: { effect: "allow", reason: "rule:allow" } });
     expect((await allIssues(t)).every((i) => i.status === "resolved")).toBe(true);
     expect((await allTasks(t)).some((x) => x.kind === "package")).toBe(false);
     expect((await getTask(t, mgr._id)).status).toBe("done");
@@ -307,6 +312,7 @@ describe("flow A", () => {
     expect(fm.thread).toBe(ledger._id);
     const bug = { type: "file_bug", params: { title: "Renewals charge twice", body: "12 customers on Oct 22", severity: "high" }, rationale: "Billing defect." };
     await reply(t, fm._id, { type: "ESCALATE", need: "authority", summary: "No rule covers a $420 batch refund.", attempts: ["Checked rules", "Checked budget"], proposed_actions: [batch, bug] });
+    await drain(t); // Jev labels the batch (spec 11), then the gate decides
     const actions = await t.run((ctx) => ctx.db.query("actions").withIndex("by_task", (q) => q.eq("task", fm._id)).collect());
     expect(actions.map((a) => [a.type, a.status, a.gate?.reason])).toEqual([
       ["refund_batch", "escalated", "hard:budget"],
@@ -389,6 +395,7 @@ describe("flow A", () => {
     const cm = await taskOf(t, "customer_manager", "issue");
     const refund = { type: "refund", params: { customer_id: "nobody", amount_cents: 48_000, reason: "billing_error" }, rationale: "Big refund." };
     await reply(t, cm._id, { type: "ESCALATE", need: "authority", summary: "A $480 refund.", attempts: ["Checked rules"], proposed_actions: [refund] });
+    await drain(t);
     const pkg = await taskOf(t, "cofounder", "package");
     await reply(t, pkg._id, {
       type: "REPORT",

@@ -106,6 +106,7 @@ npx convex env set NAME value   # set a backend secret
 | `APIFY_TOKEN` | Apify API token |
 | `APIFY_WEBHOOK_TOKEN` | random string appended to Apify webhook URL |
 | `CO_TOKEN_SECRET` | HMAC secret for task-scoped `co` tokens |
+| `AI_GATEWAY_URL` | optional override of `https://ai-gateway.convex.dev` (spec 11 points it at a broken URL to test the Jev failure path) |
 
 Agent App IDs and each agent's input field id are data, stored in the `agents` table by the seed, not env vars. Channels (`rooms` table) are Convex-only.
 
@@ -130,7 +131,7 @@ This is the **only** Creao API we use. Known from Creao docs (https://docs.creao
 
 ### Convex AI Gateway — base `https://ai-gateway.convex.dev`, token from `getServiceToken("ai-gateway")` inside an action (paid plan required; apply hackathon coupon)
 - Text: AI SDK `convexGateway("anthropic/<model>")` from `@convex-dev/ai-sdk-provider`; or `POST /v1/messages` (Anthropic shape). `VERIFY` the exact Claude model id with `GET /v1/models`.
-- Jev: `POST /alpha/decisions` `{model: "typesafe/jev-1.13", state, questions: {name: {type: "choice"|"score"|"noul", instructions, criteria?}}}` → `answers.name.{choice|score|noul, confidence?, probabilities?}`. Alpha: wrap every call; failure ⇒ escalate, never block.
+- Jev: `POST /alpha/decisions` `{model: "typesafe/jev-1.13", state, questions: {name: {type: "choice"|"score"|"noul", instructions, criteria?: {option: description}}}}` → `answers.name.{choice|score|noul, confidence?, probabilities?}`, `usage.cost` (USD). Verified 2026-10-24: a choice returns `confidence` + `probabilities`, a noul only `noul`. Alpha: wrap every call; failure ⇒ escalate, never block.
 - Embeddings: `POST /v1/embeddings` (OpenAI shape).
 
 ### Nessie — key as query param `?key=…`

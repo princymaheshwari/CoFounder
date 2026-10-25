@@ -175,7 +175,7 @@ const REJECTION_TEXT: Record<HandoffRejection | "no_agent", string> = {
 
 // ---------------------------------------------------------------- agent replies
 
-// Persists proposed actions; spec 11 labels each one and spec 07 gates it.
+// Persists proposed actions; labels.labelActions labels each one (spec 11) and the gate decides it (spec 07).
 export async function proposeActions(ctx: MutationCtx, task: Doc<"tasks">, actions: ProposedAction[]): Promise<Id<"actions">[]> {
   const ids: Id<"actions">[] = [];
   for (const action of actions) {
@@ -202,8 +202,8 @@ async function finishWithActions(ctx: MutationCtx, task: Doc<"tasks">, env: Enve
   }
   const actionIds = await proposeActions(ctx, task, env.proposed_actions);
   await transition(ctx, task, "gated", env.type, { messageId, actionIds });
-  // Each action is gated in its own transaction (spec 11 inserts labeling before this).
-  for (const actionId of actionIds) await ctx.scheduler.runAfter(0, internal.gate.evaluateGate, { actionId });
+  // Jev labels each action, then the gate decides it in the same transaction as its labels (spec 11).
+  await ctx.scheduler.runAfter(0, internal.labels.labelActions, { actionIds, then: { kind: "gate" } });
 }
 
 // A cross-department handoff is announced in #leadership (no run), so the conversation is visible there (spec 09).

@@ -1,3 +1,4 @@
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { appendMessage, audit } from "./channels";
@@ -202,9 +203,17 @@ async function toManagerTask(ctx: MutationCtx, issue: Doc<"issues">, task: Doc<"
   await audit(ctx, { actor: "dispatcher", kind: "issue_escalated", ref: task._id, detail: { issueId: issue._id, to: role, handlerTask: taskId, related: related.length } });
 }
 
-// Authority at manager level: the gate decides each proposed action; what it escalates goes to the founder.
+// Authority at manager level: Jev labels each proposed action (spec 11), then the gate decides each one;
+// what it escalates goes to the founder.
 async function gateForFounder(ctx: MutationCtx, issue: Doc<"issues">, task: Doc<"tasks">, proposed: ProposedAction[]): Promise<void> {
   const actionIds = await proposeActions(ctx, task, proposed);
+  if (actionIds.length === 0) return await requestPackage(ctx, issue, task, []);
+  await ctx.scheduler.runAfter(0, internal.labels.labelActions, { actionIds, then: { kind: "founder", issueId: issue._id, taskId: task._id } });
+}
+
+export async function gateLabeledForFounder(ctx: MutationCtx, issueId: Id<"issues">, taskId: Id<"tasks">, actionIds: Id<"actions">[]): Promise<void> {
+  const [issue, task] = [await ctx.db.get(issueId), await ctx.db.get(taskId)];
+  if (!issue || !task || issue.status === "resolved") return;
   const escalated: Id<"actions">[] = [];
   const outcomes: string[] = [];
   for (const id of actionIds) {
