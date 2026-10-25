@@ -54,7 +54,8 @@ function Tape({ tally }: { tally: Overview["tally"] }) {
 }
 
 const ACTS = [
-  { act: "double_charge", title: "Charged twice", cue: "Watch #customer, then #finance. Support refunds its own ticket under R7 without asking you; the pattern climbs to one package on your desk." },
+  { act: "double_charge", title: "Charged twice", cue: "Watch #customer, then #finance. Support refunds its own ticket under R7 without asking you; the pattern climbs to one package on your desk. Answer with “Approve and make it a rule”." },
+  { act: "double_charge_again", title: "Charged twice, next morning", cue: "Approve the refund rule first. The same bug hits three more customers: the agents climb the same ladder, the gate decides under your rule, and Nessie pays. Nothing reaches you." },
   { act: "posts", title: "Three LinkedIn posts", cue: "Approve all three in Founder desk. After the third, Claude drafts a rule from your decisions and asks you to approve it." },
   { act: "after_rule", title: "A post after the rule", cue: "Approve the rule first. This post is decided by the rule and never reaches you." },
 ] as const;

@@ -92,7 +92,7 @@ npx convex run seed:config   # seed agents + channels (rooms) rows from convex/s
 npx convex run health:check  # confirm CREAO_API_KEY reaches the API Trigger
 npx convex run health:gateway '{"match":"anthropic"}'  # confirm the AI Gateway token and list model ids
 npx convex run story:resetInternal   # demo: clear conversations, decisions and rules (keeps company, customers, R7)
-npx convex run story:start '{"act":"double_charge"}'   # demo acts: double_charge | posts | after_rule (also buttons in the app)
+npx convex run story:start '{"act":"double_charge"}'   # demo acts: double_charge | double_charge_again | posts | after_rule (also buttons in the app; refunds hit the Nessie sandbox)
 npx convex run story:primeLive   # before a pitch: reset, then send a seeded double-charge ticket through live Creao agents (~4–6 min to #founder-desk)
 npx convex run nessie:seedNessie   # seed the Nessie sandbox + customers/ledger_mirror/tickets (idempotent)
 npx convex run nessie:syncLedger   # mirror Nessie into ledger_mirror now (cron runs it every 10 min)

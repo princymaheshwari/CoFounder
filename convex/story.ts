@@ -3,8 +3,11 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { env, internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { appendMessage, audit } from "./channels";
+import { currentBudget } from "./gate";
+import { CATALOG } from "./lib/catalog";
 import { DAY_MS, findDuplicateCharges } from "./lib/co";
 import { vRunPurpose, type ActionType } from "./lib/types";
+import { DEMO_RESET_KEY, priorRefund, refundGuardSince } from "./nessie";
 import { seedRules } from "./seed";
 import { assign } from "./dispatcher";
 import { insertTask, taskFromEvent } from "./tasks";
@@ -12,7 +15,8 @@ import { insertTask, taskFromEvent } from "./tasks";
 // Story mode: a repeatable demo through the real pipeline. Tasks run with mode "replay": the Dispatcher
 // still posts every ASSIGN, but instead of a Creao run, `reply` answers with a recorded envelope a few
 // seconds later and hands it to dispatcher.recordReply, so the validator, gate, Jev labels, issue ladder,
-// #founder-desk requests and rule learning all run for real. Execution is recorded, never sent.
+// #founder-desk requests and rule learning all run for real. Money actions execute in the Nessie sandbox
+// (once seeded); the Executor and the post queue are recorded, never sent.
 // Everything here needs DEMO_TOOLS=on (npx convex env set DEMO_TOOLS on).
 
 export const STORY_REPLY_MS = 2_500;
@@ -33,15 +37,41 @@ const POSTS = [
 const postIndex = (brief: string) => Number(/\[story post (\d+)\]/.exec(brief)?.[1] ?? 0);
 
 type Env = Record<string, unknown>;
+type BatchItem = { customer_id: string; amount_cents: number };
 
-async function loyalCustomer(ctx: QueryCtx): Promise<Doc<"customers"> | null> {
+const tenureDays = (c: Doc<"customers">, now: number) => (now - c.signup_at) / DAY_MS;
+
+// The customer who writes in: a long-standing one (R7 covers them), preferably one of the duplicate charges,
+// so the Ledger batch later skips them instead of refunding them twice.
+async function loyalCustomer(ctx: QueryCtx, prefer: string[] = []): Promise<Doc<"customers"> | null> {
   const now = Date.now();
   const all = await ctx.db.query("customers").take(200);
-  return all.find((c) => (now - c.signup_at) / DAY_MS >= 120) ?? all[0] ?? null;
+  const loyal = all.filter((c) => tenureDays(c, now) >= 120);
+  return loyal.find((c) => prefer.includes(c._id)) ?? loyal[0] ?? all[0] ?? null;
+}
+
+// Act 2's customers: long-standing ones Nessie has not refunded since the last demo reset, so every refund is new.
+async function unrefundedCustomers(ctx: MutationCtx, n: number): Promise<Doc<"customers">[]> {
+  const now = Date.now();
+  const since = refundGuardSince(now);
+  const out: Doc<"customers">[] = [];
+  const all = (await ctx.db.query("customers").take(200)).filter((c) => tenureDays(c, now) >= 120).sort((a, b) => a.signup_at - b.signup_at);
+  for (const c of all) {
+    if (out.length === n) break;
+    if (!(await priorRefund(ctx, c.nessie_account_id, since))) out.push(c);
+  }
+  return out;
+}
+
+// What act 2 happens on: the payload the story event carries.
+type StoryPayload = { ticket?: string; customer?: string; story_act?: string; batch?: BatchItem[] };
+async function storyPayload(ctx: QueryCtx, task: Doc<"tasks">): Promise<StoryPayload> {
+  const event = task.event ? await ctx.db.get(task.event) : null;
+  return (event?.payload ?? {}) as StoryPayload;
 }
 
 // The duplicate charges Ledger finds with `co data duplicates`, as one refund batch.
-async function duplicateBatch(ctx: QueryCtx): Promise<{ items: { customer_id: string; amount_cents: number }[]; total: number }> {
+async function duplicateBatch(ctx: QueryCtx): Promise<{ items: BatchItem[]; total: number }> {
   const customers = await ctx.db.query("customers").take(1000);
   const byAccount = new Map(customers.map((c) => [c.nessie_account_id, c]));
   const transfers = await ctx.db
@@ -67,14 +97,16 @@ const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 // What each agent says in the story, decided from the task in front of it (the ladder picks who is next).
 async function scriptFor(ctx: QueryCtx, task: Doc<"tasks">): Promise<Env> {
   const base = { task: task._id, from: task.role };
+  const payload = await storyPayload(ctx, task);
+  const again = payload.story_act === "double_charge_again";
   switch (task.role) {
     case "support": {
-      const event = task.event ? await ctx.db.get(task.event) : null;
-      const payload = (event?.payload ?? {}) as { ticket?: string; customer?: string };
       return {
         ...base,
         type: "REPORT",
-        summary: "Refunded the duplicate $35 Pro charge under R7. Five more tickets this morning report the same double charge.",
+        summary: again
+          ? "Refunded the duplicate $35 Pro charge under R7. Two more customers wrote in overnight about the same double charge."
+          : "Refunded the duplicate $35 Pro charge under R7. Five more tickets this morning report the same double charge.",
         proposed_actions: [
           {
             type: "refund",
@@ -82,7 +114,9 @@ async function scriptFor(ctx: QueryCtx, task: Doc<"tasks">): Promise<Env> {
             rationale: "Charged twice for the same Pro renewal; a long-standing customer, so R7 covers it.",
           },
         ],
-        issue: { kind: "coordination", summary: "Six tickets report the same duplicate $35 Pro charge since yesterday. Looks like one billing bug, not six refunds.", attempts: ["Refunded my own ticket under R7", "Checked co data tickets"] },
+        issue: again
+          ? { kind: "coordination", summary: "Three tickets overnight report the same duplicate $35 Pro charge as yesterday. The renewal bug again.", attempts: ["Refunded my own ticket under R7", "Checked co data tickets"] }
+          : { kind: "coordination", summary: "Six tickets report the same duplicate $35 Pro charge since yesterday. Looks like one billing bug, not six refunds.", attempts: ["Refunded my own ticket under R7", "Checked co data tickets"] },
       };
     }
     case "customer_manager":
@@ -91,20 +125,41 @@ async function scriptFor(ctx: QueryCtx, task: Doc<"tasks">): Promise<Env> {
         type: "HANDOFF",
         to_role: "ledger",
         brief: "Find every customer charged twice for the Pro renewal and propose one fix for all of them.",
-        summary: "Grouped the six tickets: one billing bug. Ledger can see every affected account.",
+        summary: again ? "Same pattern as yesterday's double charge. Ledger can see every affected account." : "Grouped the six tickets: one billing bug. Ledger can see every affected account.",
       };
     case "ledger": {
-      const batch = await duplicateBatch(ctx);
+      const items = again && payload.batch?.length ? payload.batch : (await duplicateBatch(ctx)).items;
+      const total = items.reduce((n, i) => n + i.amount_cents, 0);
       return {
         ...base,
         type: "ESCALATE",
         need: "authority",
-        summary: `${batch.items.length} customers were charged twice (${dollars(batch.total)} in total). That is over today's refund budget, so I can't approve it.`,
+        summary: again
+          ? `${items.length} more customers were charged twice overnight (${dollars(total)} in total). A batch refund is the Finance manager's call.`
+          : `${items.length} customers were charged twice (${dollars(total)} in total). That is over today's refund budget, so I can't approve it.`,
         attempts: ["co data duplicates", "co data budget"],
-        proposed_actions: [{ type: "refund_batch", params: { items: batch.items, reason: "billing_error" }, rationale: `Refund all ${batch.items.length} duplicate charges in one batch.` }],
+        proposed_actions: [{ type: "refund_batch", params: { items, reason: "billing_error" }, rationale: `Refund all ${items.length} duplicate charges in one batch.` }],
       };
     }
     case "finance_manager": {
+      const issue = task.issue ? await ctx.db.get(task.issue) : null;
+      if (issue?.kind === "capability") {
+        // Nessie refused an execution (markFailed raised it): nothing to re-propose in the story.
+        return { ...base, type: "REPORT", summary: "Nessie could not execute the refund. Checked the action; the founder can see the error in the thread." };
+      }
+      if (again) {
+        // The bug is already filed: only the batch goes to the gate, and an approved rule may now decide it.
+        const batch = await latestOfType(ctx, task.chain_id, "refund_batch");
+        const params = (batch?.params as Env | undefined) ?? { items: payload.batch ?? [], reason: "billing_error" };
+        return {
+          ...base,
+          type: "ESCALATE",
+          need: "authority",
+          summary: "Same renewal bug as yesterday, and the bug is already filed. Sending the batch refund to the gate.",
+          attempts: ["Checked active rules", "Checked today's budget", "Found yesterday's bug"],
+          proposed_actions: [{ type: "refund_batch", params, rationale: batch?.rationale ?? "Refund every duplicate charge." }],
+        };
+      }
       // Ledger's ESCALATE carried the batch as a proposal only; the manager re-proposes it (spec 09 gates it here).
       const batch = await latestOfType(ctx, task.chain_id, "refund_batch");
       const params = (batch?.params as Env | undefined) ?? { items: (await duplicateBatch(ctx)).items, reason: "billing_error" };
@@ -195,7 +250,54 @@ export async function recordStoryExecution(ctx: MutationCtx, action: Doc<"action
 
 // ---------------------------------------------------------------- acts
 
-const vAct = v.union(v.literal("double_charge"), v.literal("posts"), v.literal("after_rule"));
+const vAct = v.union(v.literal("double_charge"), v.literal("double_charge_again"), v.literal("posts"), v.literal("after_rule"));
+
+// Act 2 happens "the next morning": today's refund budget starts over, said in #finance and audited.
+async function startNextDay(ctx: MutationCtx): Promise<void> {
+  const scope = CATALOG.refund_batch.budgetScope!;
+  const budget = await currentBudget(ctx, scope, Date.now());
+  if (budget && budget.spent_cents > 0) await ctx.db.patch(budget._id, { spent_cents: 0 });
+  await audit(ctx, { actor: "founder", kind: "story_next_day", ref: scope, detail: { was_spent_cents: budget?.spent_cents ?? 0 } });
+  const finance = await ctx.db
+    .query("rooms")
+    .withIndex("by_name", (q) => q.eq("name", "#finance"))
+    .unique();
+  if (finance) {
+    await appendMessage(ctx, {
+      room: finance._id,
+      sender_kind: "system",
+      sender_name: "Dispatcher",
+      text: `[Dispatcher] Story: the next morning. Today's refund budget starts over${budget ? ` (${dollars(budget.limit_cents)})` : ""}.`,
+    });
+  }
+}
+
+async function ticketEvent(ctx: MutationCtx, customer: Doc<"customers"> | null, extra: Env): Promise<Id<"events">> {
+  const now = Date.now();
+  const ticket = await ctx.db.insert("tickets", {
+    ...(customer ? { customer: customer._id } : {}),
+    from_email: STORY_EMAIL,
+    subject: "Charged twice for Pro this month",
+    body: "Hi, my card shows two $35 charges for the Pro plan this month. I only have one account. Can you refund the extra one?",
+    amount_cents: 3500,
+    status: "open",
+    source: "seed",
+    created_at: now,
+  });
+  return await ctx.db.insert("events", {
+    type: "support_ticket",
+    payload: {
+      ticket,
+      ...(customer ? { customer: customer._id } : {}),
+      brief: `Handle ticket ${ticket}: "Charged twice for Pro this month". The customer sees two $35 Pro charges and asks for the extra one back.`,
+      data_hints: [`co data ticket --id ${ticket}`],
+      ...extra,
+    },
+    source: "replay",
+    processed: false,
+    created_at: now,
+  });
+}
 
 async function contentTask(ctx: MutationCtx, n: number): Promise<Id<"tasks">> {
   const room = await ctx.db
@@ -224,31 +326,17 @@ export const start = mutation({
     requireDemo();
     await audit(ctx, { actor: "founder", kind: "story_act", ref: act });
     if (act === "double_charge") {
-      const customer = await loyalCustomer(ctx);
-      const now = Date.now();
-      const ticket = await ctx.db.insert("tickets", {
-        ...(customer ? { customer: customer._id } : {}),
-        from_email: STORY_EMAIL,
-        subject: "Charged twice for Pro this month",
-        body: "Hi, my card shows two $35 charges for the Pro plan this month. I only have one account. Can you refund the extra one?",
-        amount_cents: 3500,
-        status: "open",
-        source: "seed",
-        created_at: now,
-      });
-      const eventId = await ctx.db.insert("events", {
-        type: "support_ticket",
-        payload: {
-          ticket,
-          ...(customer ? { customer: customer._id } : {}),
-          brief: `Handle ticket ${ticket}: "Charged twice for Pro this month". The customer sees two $35 Pro charges and asks for the extra one back.`,
-          data_hints: [`co data ticket --id ${ticket}`],
-        },
-        source: "replay",
-        processed: false,
-        created_at: now,
-      });
-      const created = await taskFromEvent(ctx, eventId);
+      const customer = await loyalCustomer(ctx, (await duplicateBatch(ctx)).items.map((i) => i.customer_id));
+      const created = await taskFromEvent(ctx, await ticketEvent(ctx, customer, {}));
+      return created ? [created.taskId] : [];
+    }
+    if (act === "double_charge_again") {
+      // A smaller repeat of act 1 the next morning. With the founder's rule active, it ends at the gate.
+      const customers = await unrefundedCustomers(ctx, 3);
+      if (!customers.length) throw new Error("Every long-standing customer was refunded since the last reset. Reset the demo first.");
+      await startNextDay(ctx);
+      const batch: BatchItem[] = customers.map((c) => ({ customer_id: c._id, amount_cents: 3500 }));
+      const created = await taskFromEvent(ctx, await ticketEvent(ctx, customers[0], { story_act: act, batch }));
       return created ? [created.taskId] : [];
     }
     if (act === "posts") {
@@ -310,6 +398,13 @@ export async function resetDemo(ctx: MutationCtx): Promise<Record<string, number
   for (const c of await ctx.db.query("config").take(500)) if (c.key.startsWith("induction_pending")) await ctx.db.delete(c._id);
   for (const r of await ctx.db.query("rooms").take(50)) await ctx.db.patch(r._id, { next_seq: 1 });
   for (const f of await ctx.db.query("founder").take(10)) await ctx.db.patch(f._id, { status: "present", updated_at: Date.now() });
+  // Refunds already in Nessie stay there; the double-refund guard stops counting the ones whose actions were just wiped.
+  const stamp = await ctx.db
+    .query("config")
+    .withIndex("by_key", (q) => q.eq("key", DEMO_RESET_KEY))
+    .unique();
+  if (stamp) await ctx.db.patch(stamp._id, { value: Date.now() });
+  else await ctx.db.insert("config", { key: DEMO_RESET_KEY, value: Date.now() });
   await seedRules(ctx);
   return counts;
 }

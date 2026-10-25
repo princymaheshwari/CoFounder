@@ -137,25 +137,27 @@ export const postDigest = internalMutation({
 // ---------------------------------------------------------------- induction
 
 // Scheduled after each founder decision: enough uncovered decisions in one direction start an induction.
+// `min: 1` is the founder's "make it a rule" on one decision: Claude still only drafts, replay still has to
+// agree with every covered decision, and the founder still approves the rule.
 export const maybeInduce = internalMutation({
-  args: { actionType: vActionType },
+  args: { actionType: vActionType, min: v.optional(v.number()) },
   returns: v.boolean(),
-  handler: async (ctx, { actionType }) => {
+  handler: async (ctx, { actionType, min: requested }) => {
     if ((await rulesWithStatus(ctx, actionType, "proposed")).length) return false; // one awaiting review at a time
-    const min = await getConfig(ctx, "induction_min", CONFIG_DEFAULTS.induction_min);
+    const min = requested ?? (await getConfig(ctx, "induction_min", CONFIG_DEFAULTS.induction_min));
     const target = inductionTarget(await founderDecisions(ctx, actionType), (await rulesWithStatus(ctx, actionType, "active")).map(ruleLike), await deptOfFn(ctx), min);
     if (!target || !(await claimInduction(ctx, actionType, Date.now()))) return false;
-    await audit(ctx, { actor: "rules", kind: "induction_started", ref: actionType, detail: { choice: target.choice, decisions: target.decisions.map((d) => d.id) } });
-    await ctx.scheduler.runAfter(0, internal.rules.induceRule, { actionType });
+    await audit(ctx, { actor: "rules", kind: "induction_started", ref: actionType, detail: { choice: target.choice, decisions: target.decisions.map((d) => d.id), min } });
+    await ctx.scheduler.runAfter(0, internal.rules.induceRule, { actionType, ...(requested !== undefined ? { min: requested } : {}) });
     return true;
   },
 });
 
 export const inductionInput = internalQuery({
-  args: { actionType: vActionType },
+  args: { actionType: vActionType, min: v.optional(v.number()) },
   returns: v.union(v.null(), v.object({ choice: vDecisionChoice, decisions: v.array(v.string()), prompt: v.string() })),
-  handler: async (ctx, { actionType }) => {
-    const min = (await ctx.db.query("config").withIndex("by_key", (q) => q.eq("key", "induction_min")).unique())?.value ?? CONFIG_DEFAULTS.induction_min;
+  handler: async (ctx, { actionType, min: requested }) => {
+    const min = requested ?? (await ctx.db.query("config").withIndex("by_key", (q) => q.eq("key", "induction_min")).unique())?.value ?? CONFIG_DEFAULTS.induction_min;
     const active = await rulesWithStatus(ctx, actionType, "active");
     const target = inductionTarget(await founderDecisions(ctx, actionType), active.map(ruleLike), await deptOfFn(ctx), typeof min === "number" ? min : CONFIG_DEFAULTS.induction_min);
     if (!target) return null;
@@ -169,10 +171,10 @@ export const inductionInput = internalQuery({
 
 // Claude drafts a candidate with structured output; anything it cannot produce is dropped with an audit row.
 export const induceRule = internalAction({
-  args: { actionType: vActionType },
+  args: { actionType: vActionType, min: v.optional(v.number()) },
   returns: v.null(),
-  handler: async (ctx, { actionType }) => {
-    const input = await ctx.runQuery(internal.rules.inductionInput, { actionType });
+  handler: async (ctx, { actionType, min }) => {
+    const input = await ctx.runQuery(internal.rules.inductionInput, { actionType, ...(min !== undefined ? { min } : {}) });
     if (!input) {
       await ctx.runMutation(internal.rules.dropCandidate, { actionType, why: "nothing left to induce" });
       return null;
@@ -196,7 +198,7 @@ export const induceRule = internalAction({
       await ctx.runMutation(internal.rules.dropCandidate, { actionType, why: `claude: ${why.slice(0, 300)}` });
       return null;
     }
-    await ctx.runMutation(internal.rules.proposeRule, { actionType, choice: input.choice, candidate, ...(cost !== undefined ? { cost_usd: cost } : {}) });
+    await ctx.runMutation(internal.rules.proposeRule, { actionType, choice: input.choice, candidate, ...(cost !== undefined ? { cost_usd: cost } : {}), ...(min !== undefined ? { min } : {}) });
     return null;
   },
 });
@@ -219,7 +221,7 @@ const vProposeResult = v.union(
 // Validates a candidate (schema, fields, direction), replays it against every founder decision of the type,
 // and only on 100% agreement stores it as `proposed` with a founder inbox item showing the diff.
 export const proposeRule = internalMutation({
-  args: { actionType: vActionType, choice: vDecisionChoice, candidate: v.any(), cost_usd: v.optional(v.number()) },
+  args: { actionType: vActionType, choice: vDecisionChoice, candidate: v.any(), cost_usd: v.optional(v.number()), min: v.optional(v.number()) },
   returns: vProposeResult,
   handler: async (ctx, a) => {
     await releaseInduction(ctx, a.actionType);
@@ -229,7 +231,7 @@ export const proposeRule = internalMutation({
 
 export async function proposeCandidate(
   ctx: MutationCtx,
-  a: { actionType: ActionType; choice: DecisionChoice; candidate: unknown; cost_usd?: number },
+  a: { actionType: ActionType; choice: DecisionChoice; candidate: unknown; cost_usd?: number; min?: number },
 ): Promise<{ ok: true; ruleId: Id<"rules">; agree: number; total: number } | { ok: false; why: string; counterexamples: string[] }> {
   const reject = async (kind: "rule_dropped" | "rule_rejected", why: string, extra: Record<string, unknown> = {}) => {
     await audit(ctx, { actor: "rules", kind, ref: a.actionType, detail: { why, candidate: a.candidate ?? null, cost_usd: a.cost_usd ?? null, ...extra } });
@@ -244,7 +246,7 @@ export async function proposeCandidate(
   const rule = normalizeCandidate(parsed.data);
   const deptOf = await deptOfFn(ctx);
   const result = replay(rule, decisions, deptOf);
-  const min = await getConfig(ctx, "induction_min", CONFIG_DEFAULTS.induction_min);
+  const min = a.min ?? (await getConfig(ctx, "induction_min", CONFIG_DEFAULTS.induction_min));
   const agreement = { agree: result.agree, total: result.total };
   if (result.counterexamples.length) return await reject("rule_rejected", "contradicts past founder decisions", { agreement, counterexamples: result.counterexamples });
   if (result.total < min) return await reject("rule_rejected", `covers only ${result.total} decisions (needs ${min})`, { agreement, counterexamples: [] });

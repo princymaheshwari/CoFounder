@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import schema from "../convex/schema";
 import { api, internal } from "../convex/_generated/api";
 import { FakeJev, isJev } from "./fakes/jev";
+import { FakeNessie } from "./fakes/nessie";
 
 // Story mode (convex/story.ts) through the real pipeline, and the founder app's read models (convex/feed.ts).
 
@@ -151,6 +152,83 @@ describe("story mode", () => {
     expect(thread.messages[0].headline).not.toMatch(/story post/);
     expect(thread.messages.find((m) => m.kind === "reply")!.envelope).toMatchObject({ type: "REPORT", actions: [{ type: "publish_post" }] });
     expect(thread.actions[0]).toMatchObject({ status: "escalated", reason: "First time this kind of action came up" });
+  });
+
+  test("with Nessie seeded: refunds move money, 'make it a rule' drafts a rule from one decision, and the next morning ends at the gate", async () => {
+    const t = setup();
+    const nessie = new FakeNessie();
+    vi.stubEnv("NESSIE_API_KEY", "nessie_test");
+    const candidates: Record<string, unknown> = {
+      refund_batch: {
+        scope: { level: "role", role: "finance_manager" },
+        action_type: "refund_batch",
+        conditions: [
+          { field: "amount_cents", op: "<=", value: 42000 },
+          { field: "refund_reason", op: "in", value: ["billing_error"] },
+        ],
+        effect: "allow",
+        rationale: "Billing-error batches up to the size the founder approved.",
+      },
+      file_bug: { scope: { level: "role", role: "finance_manager" }, action_type: "file_bug", conditions: [], effect: "allow", rationale: "Bugs the Finance manager finds." },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        if (String(url).includes("/chat/completions")) {
+          const type = /Action type: (\w+)/.exec(String(init?.body))?.[1] ?? "";
+          const content = JSON.stringify(candidates[type]);
+          return new Response(
+            JSON.stringify({ id: "c", object: "chat.completion", created: 1, model: "m", choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (isJev(url)) return jev.fetch(url, init);
+        if (String(url).includes("nessieisreal")) return nessie.fetch(url, init);
+        elsewhere.push(String(url)); // Creao: story mode never calls it
+        return new Response("{}", { status: 500 });
+      }),
+    );
+    await t.mutation(internal.seed.config, {});
+    await t.action(internal.nessie.seedNessie, {});
+    const refunds = () => nessie.transfers.filter((x) => /\[cf:act-/.test(String(x.description)));
+    const actionsOf = async (type: string) => (await t.run((ctx) => ctx.db.query("actions").collect())).filter((a) => a.type === type);
+
+    // Act 1: Support's R7 refund and the founder-approved batch are real Nessie transfers.
+    await t.mutation(api.story.start, { act: "double_charge" });
+    await drain(t);
+    const [refund] = await actionsOf("refund");
+    expect(refund).toMatchObject({ status: "executed", gate: { effect: "allow", reason: "rule:allow" } });
+    expect(refund.executed_ref![0]).not.toMatch(/^story:/);
+    expect(refunds()).toHaveLength(1);
+    const [pkg] = await openRequests(t);
+    expect(pkg.kind).toBe("package");
+    expect((await actionsOf("refund_batch"))[0]).toMatchObject({ amount_cents: 42000, gate: { reason: "hard:budget" } });
+
+    await t.mutation(api.inbox.decide, { inboxId: pkg._id, choice: "approve", makeRule: true });
+    await drain(t);
+    // 12 duplicates; the customer Support already refunded is skipped by the double-refund guard.
+    expect((await actionsOf("refund_batch"))[0]).toMatchObject({ status: "executed" });
+    expect(refunds()).toHaveLength(12);
+    const rules = await openRequests(t);
+    expect(rules.map((r) => r.title)).toEqual(expect.arrayContaining([expect.stringMatching(/for file_bug\?$/), expect.stringMatching(/for refund_batch\?$/)]));
+    expect(rules).toHaveLength(2);
+    for (const r of rules) await t.mutation(api.inbox.decide, { inboxId: r._id, choice: "approve" });
+
+    // Act 2, the next morning: the same ladder, decided by the new rule; nothing reaches the founder.
+    await t.mutation(api.story.start, { act: "double_charge_again" });
+    await drain(t);
+    expect(await openRequests(t)).toEqual([]);
+    const again = (await actionsOf("refund_batch")).sort((a, b) => a._creationTime - b._creationTime)[1];
+    expect(again).toMatchObject({ amount_cents: 10500, status: "executed", gate: { effect: "allow", reason: "rule:allow" } });
+    expect(refunds()).toHaveLength(15); // Support's refund + 2 batch items (its own customer skipped)
+    expect(elsewhere).toEqual([]);
+
+    // After a reset the same seeded customers can be refunded again (the guard ignores wiped actions).
+    await t.mutation(api.story.reset, {});
+    await t.mutation(api.story.start, { act: "double_charge" });
+    await drain(t);
+    expect((await actionsOf("refund"))[0]).toMatchObject({ status: "executed" });
+    expect(refunds()).toHaveLength(16);
   });
 
   test("demo tools are off unless DEMO_TOOLS=on", async () => {

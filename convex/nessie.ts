@@ -520,6 +520,40 @@ const vBegin = v.union(
 // lists them twice. Checked inside beginExecution, so concurrent executions serialize on it.
 const REFUND_GUARD_DAYS = 30;
 
+// Set by the demo reset (story.resetDemo, DEMO_TOOLS only). Once set, the guard ignores refunds whose action
+// the reset wiped, so a rehearsed story can refund the same seeded customers again.
+export const DEMO_RESET_KEY = "demo_reset_at";
+
+// Nessie money actions can run: the sandbox is seeded (story mode falls back to recording otherwise).
+export async function nessieReady(ctx: MutationCtx): Promise<boolean> {
+  return (await getConfig<NessieState | null>(ctx, STATE_KEY, null))?.seeded_at !== undefined;
+}
+
+// The newest refund from the operating account to `toAccount` since `since` (ISO), skipping our own
+// `ownPrefix` items and, after a demo reset, refunds whose action no longer exists.
+export async function priorRefund(ctx: MutationCtx, toAccount: string, since: string, ownPrefix = ""): Promise<Doc<"ledger_mirror"> | null> {
+  const state = await getConfig<NessieState | null>(ctx, STATE_KEY, null);
+  if (!state) return null;
+  const demoReset = (await getConfig<number | null>(ctx, DEMO_RESET_KEY, null)) !== null;
+  const rows = await ctx.db
+    .query("ledger_mirror")
+    .withIndex("by_counterparty_date", (q) => q.eq("counterparty", toAccount).gte("date", since))
+    .take(50);
+  for (const r of rows) {
+    if (r.kind !== "transfer" || r.account_id !== state.operating_account_id) continue;
+    const marker = markerOf(r.raw as NessieObject) ?? "";
+    if (ownPrefix && marker.startsWith(ownPrefix)) continue;
+    if (demoReset) {
+      const actionId = ctx.db.normalizeId("actions", /^act-(.+)-\d+$/.exec(marker)?.[1] ?? "");
+      if (actionId && !(await ctx.db.get(actionId))) continue;
+    }
+    return r;
+  }
+  return null;
+}
+
+export const refundGuardSince = (now: number) => new Date(now - REFUND_GUARD_DAYS * DAY_MS).toISOString();
+
 // The gate (on allow) or the founder's approval debited the action's full amount; items the guard skips are
 // never paid, so their amount goes back to the current budget period. Each marker is credited once (resumes re-skip).
 async function creditSkipped(ctx: MutationCtx, action: Doc<"actions">, items: ExecItem[], markers: string[]): Promise<void> {
@@ -538,10 +572,10 @@ async function creditSkipped(ctx: MutationCtx, action: Doc<"actions">, items: Ex
   await audit(ctx, { actor: "nessie", kind: "budget_credit", ref: action.task, detail: { actionId: action._id, scope, markers: fresh, cents } });
 }
 
-async function refundConflicts(ctx: MutationCtx, action: Doc<"actions">, items: ExecItem[], op: string): Promise<Map<string, { to_account: string; reason: string }>> {
+async function refundConflicts(ctx: MutationCtx, action: Doc<"actions">, items: ExecItem[]): Promise<Map<string, { to_account: string; reason: string }>> {
   const skips = new Map<string, { to_account: string; reason: string }>();
   const ownPrefix = `act-${action._id}-`;
-  const since = new Date(Date.now() - REFUND_GUARD_DAYS * DAY_MS).toISOString();
+  const since = refundGuardSince(Date.now());
   const inFlight = new Map<string, Id<"actions">>();
   for (const other of await ctx.db.query("actions").withIndex("by_status", (q) => q.eq("status", "executing")).take(50)) {
     if (other._id === action._id || CATALOG[other.type].executor !== "nessie") continue;
@@ -555,12 +589,7 @@ async function refundConflicts(ctx: MutationCtx, action: Doc<"actions">, items: 
   for (const item of items) {
     if (item.kind !== "transfer") continue;
     const skip = (reason: string) => skips.set(item.marker, { to_account: item.to_account, reason });
-    const prior = (
-      await ctx.db
-        .query("ledger_mirror")
-        .withIndex("by_counterparty_date", (q) => q.eq("counterparty", item.to_account).gte("date", since))
-        .take(50)
-    ).find((r) => r.kind === "transfer" && r.account_id === op && !(markerOf(r.raw as NessieObject) ?? "").startsWith(ownPrefix));
+    const prior = await priorRefund(ctx, item.to_account, since, ownPrefix);
     if (seen.has(item.to_account)) skip("listed twice in this batch");
     else if (prior) skip(`already refunded ${dollars(prior.amount_cents)} on ${prior.date.slice(0, 10)} (transfer ${prior.nessie_id})`);
     else if (inFlight.has(item.to_account)) skip(`a refund is in flight in action ${inFlight.get(item.to_account)}`);
@@ -606,7 +635,7 @@ export const beginExecution = internalMutation({
     }
     const done = items.filter((i) => (i.kind === "transfer" ? doneMarkers.has(i.marker) : refs.includes(i.bill_id))).map((i) => i.marker);
 
-    const conflicts = await refundConflicts(ctx, action, items.filter((i) => !done.includes(i.marker)), state.operating_account_id);
+    const conflicts = await refundConflicts(ctx, action, items.filter((i) => !done.includes(i.marker)));
     const skipped = [...conflicts].map(([marker, s]) => ({ marker, ...s }));
     const run = items.filter((i) => !conflicts.has(i.marker));
     if (skipped.length) {

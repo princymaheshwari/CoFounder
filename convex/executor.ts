@@ -12,7 +12,7 @@ import { CATALOG } from "./lib/catalog";
 import { CONNECTOR_OF, DEPARTMENT_MANAGER, executorInput, readExecutorReply, type Connector } from "./lib/executor";
 import { executionBlock } from "./lib/nessie";
 import type { RunStatus } from "./lib/types";
-import { founderApproved } from "./nessie";
+import { founderApproved, nessieReady } from "./nessie";
 
 // Spec 10: connector actions run through the one Executor agent (Auto write autonomy), started only here
 // (invariant 3: dispatcher.startRunForTask and executor.runExecutor are the only startRun callers).
@@ -47,9 +47,12 @@ export const configure = internalMutation({
 // Starts the execution an allowed or approved action needs. Called by the gate (allow) and by the founder's
 // approval, in their transaction, so only a committed decision executes anything.
 export async function scheduleExecution(ctx: MutationCtx, action: Doc<"actions">, by: "gate" | "founder"): Promise<void> {
-  // Story mode records the outcome instead of calling Nessie, the Executor or the post queue.
-  if ((await ctx.db.get(action.task))?.mode === "replay") return await recordStoryExecution(ctx, action);
   const executor = CATALOG[action.type].executor;
+  // Story mode records the outcome instead of calling the Executor or the post queue. Money still moves in
+  // the Nessie sandbox (the gate and the founder decided for real), unless Nessie was never seeded.
+  if ((await ctx.db.get(action.task))?.mode === "replay" && !(executor === "nessie" && (await nessieReady(ctx)))) {
+    return await recordStoryExecution(ctx, action);
+  }
   switch (executor) {
     case "nessie":
       await ctx.scheduler.runAfter(0, internal.nessie.executeMoneyAction, { actionId: action._id });

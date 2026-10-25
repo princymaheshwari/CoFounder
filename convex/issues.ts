@@ -453,8 +453,9 @@ async function recordDecisionMessage(ctx: MutationCtx, root: Id<"tasks">, decide
 // DECISION in every origin thread, issues resolved, escalated tasks closed. One transaction.
 export async function recordFounderDecision(
   ctx: MutationCtx,
-  a: { inboxId: Id<"founder_inbox">; choice: DecisionChoice; reason?: string },
+  a: { inboxId: Id<"founder_inbox">; choice: DecisionChoice; reason?: string; makeRule?: boolean },
 ): Promise<{ actions: number; threads: number; issues: number }> {
+  if (a.makeRule && a.choice !== "approve") throw new Error("only an approval can become a rule");
   const item = await ctx.db.get(a.inboxId);
   if (!item) throw new Error(`inbox item ${a.inboxId} not found`);
   if (item.status !== "open") throw new Error(`inbox item ${a.inboxId} is already decided`);
@@ -529,13 +530,17 @@ export async function recordFounderDecision(
   for (const t of tasks) if (t.status === "escalated") await transition(ctx, t, "done", "founder_decision", { inboxId: a.inboxId });
 
   await ctx.db.patch(a.inboxId, { status: "decided", decision: { choice: a.choice, ...(a.reason ? { reason: a.reason } : {}), at: now } });
-  // Spec 12: enough consistent founder decisions of a type become a proposed rule.
-  for (const actionType of decidedTypes) await ctx.scheduler.runAfter(0, internal.rules.maybeInduce, { actionType });
+  // Spec 12: enough consistent founder decisions of a type become a proposed rule. "Make it a rule" asks for
+  // one from this decision alone (types that always escalate cannot have an allow rule).
+  for (const actionType of decidedTypes) {
+    const asked = a.makeRule && !CATALOG[actionType].alwaysEscalate;
+    await ctx.scheduler.runAfter(0, internal.rules.maybeInduce, { actionType, ...(asked ? { min: 1 } : {}) });
+  }
   await audit(ctx, {
     actor: "founder",
     kind: "founder_decision",
     ref: chainId ?? item.ref,
-    detail: { inboxId: a.inboxId, choice: a.choice, reason: a.reason ?? null, actions: actionIds, issueId: issue?._id ?? null, threads: threads.length },
+    detail: { inboxId: a.inboxId, choice: a.choice, reason: a.reason ?? null, actions: actionIds, issueId: issue?._id ?? null, threads: threads.length, make_rule: a.makeRule ?? false },
   });
   return { actions: decided, threads: threads.length, issues: issues.length };
 }

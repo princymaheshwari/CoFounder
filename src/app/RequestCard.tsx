@@ -13,16 +13,18 @@ export function RequestCard({ request, at, onOpenThread }: { request: Request; a
   const decide = useMutation(api.inbox.decide);
   const [note, setNote] = useState("");
   const [noting, setNoting] = useState(false);
-  const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
+  const [busy, setBusy] = useState<"approve" | "rule" | "deny" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const open = request.status === "open";
   const isRule = request.kind === "rule";
+  // Approving can also ask Claude to draft a rule from this one decision; the rule comes back here for approval.
+  const canMakeRule = !isRule && request.actions.length > 0;
 
-  async function answer(choice: "approve" | "deny") {
-    setBusy(choice);
+  async function answer(choice: "approve" | "deny", makeRule = false) {
+    setBusy(makeRule ? "rule" : choice);
     setError(null);
     try {
-      await decide({ inboxId: request._id, choice, ...(note.trim() ? { reason: note.trim() } : {}) });
+      await decide({ inboxId: request._id, choice, ...(note.trim() ? { reason: note.trim() } : {}), ...(makeRule ? { makeRule: true } : {}) });
     } catch (e) {
       setError(e instanceof Error ? e.message.replace(/^.*Uncaught Error:\s*/s, "").split("\n")[0] : String(e));
     } finally {
@@ -54,6 +56,16 @@ export function RequestCard({ request, at, onOpenThread }: { request: Request; a
             >
               {busy === "approve" ? "Approving…" : isRule ? "Approve rule" : "Approve"}
             </button>
+            {canMakeRule ? (
+              <button
+                className="rounded-md border border-rule bg-surface px-4 py-2 text-[14px] font-semibold text-rule hover:bg-sunk disabled:opacity-60"
+                onClick={() => void answer("approve", true)}
+                disabled={busy !== null}
+                title="Approve, and have Claude draft a rule so agents handle this case without you next time"
+              >
+                {busy === "rule" ? "Approving…" : "Approve and make it a rule"}
+              </button>
+            ) : null}
             <button
               className="rounded-md border border-line-2 bg-surface px-4 py-2 text-[14px] font-semibold text-ink hover:bg-sunk disabled:opacity-60"
               onClick={() => void answer("deny")}

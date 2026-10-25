@@ -31,11 +31,12 @@ export const listOpen = query({
       .take(50),
 });
 
-const vDecideArgs = { inboxId: v.id("founder_inbox"), choice: vDecisionChoice, reason: v.optional(v.string()) };
+// `makeRule`: approve, and ask Claude to draft a rule from this decision (spec 12; the founder still approves the rule).
+const vDecideArgs = { inboxId: v.id("founder_inbox"), choice: vDecisionChoice, reason: v.optional(v.string()), makeRule: v.optional(v.boolean()) };
 const vDecideResult = v.object({ actions: v.number(), threads: v.number(), issues: v.number() });
 
 // Rule items (spec 12) approve or reject the proposed rule; everything else decides actions and issues.
-async function decideItem(ctx: MutationCtx, a: { inboxId: Id<"founder_inbox">; choice: DecisionChoice; reason?: string }) {
+async function decideItem(ctx: MutationCtx, a: { inboxId: Id<"founder_inbox">; choice: DecisionChoice; reason?: string; makeRule?: boolean }) {
   const item = await ctx.db.get(a.inboxId);
   if (item?.kind === "rule") {
     if (item.status !== "open") throw new Error(`inbox item ${a.inboxId} is already decided`);
@@ -48,7 +49,8 @@ async function decideItem(ctx: MutationCtx, a: { inboxId: Id<"founder_inbox">; c
 export const decide = mutation({
   args: vDecideArgs,
   returns: vDecideResult,
-  handler: (ctx, a) => decideItem(ctx, { inboxId: a.inboxId, choice: a.choice, ...(a.reason?.trim() ? { reason: a.reason.trim() } : {}) }),
+  handler: (ctx, a) =>
+    decideItem(ctx, { inboxId: a.inboxId, choice: a.choice, ...(a.reason?.trim() ? { reason: a.reason.trim() } : {}), ...(a.makeRule ? { makeRule: true } : {}) }),
 });
 
 // Same decision from the CLI: npx convex run inbox:decideInternal '{"inboxId":"…","choice":"approve"}'
