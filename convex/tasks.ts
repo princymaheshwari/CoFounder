@@ -200,6 +200,8 @@ async function finishWithActions(ctx: MutationCtx, task: Doc<"tasks">, env: Enve
   }
   const actionIds = await proposeActions(ctx, task, env.proposed_actions);
   await transition(ctx, task, "gated", env.type, { messageId, actionIds });
+  // Each action is gated in its own transaction (spec 11 inserts labeling before this).
+  for (const actionId of actionIds) await ctx.scheduler.runAfter(0, internal.gate.evaluateGate, { actionId });
 }
 
 // Acts on a valid envelope from a task in `replied` (spec 05 transitions).
