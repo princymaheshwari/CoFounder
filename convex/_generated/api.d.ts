@@ -9,6 +9,7 @@
  */
 
 import type * as audit from "../audit.js";
+import type * as bank from "../bank.js";
 import type * as channels from "../channels.js";
 import type * as co from "../co.js";
 import type * as creao_callback from "../creao/callback.js";
@@ -59,6 +60,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   audit: typeof audit;
+  bank: typeof bank;
   channels: typeof channels;
   co: typeof co;
   "creao/callback": typeof creao_callback;
