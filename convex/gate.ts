@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { appendMessage, audit, getConfig } from "./channels";
+import { appendMessage, audit, getConfig, notifyFounder } from "./channels";
 import { scheduleExecution } from "./executor";
 import { CATALOG } from "./lib/catalog";
 import { DAY_MS } from "./lib/co";
@@ -200,14 +200,12 @@ export async function gateAction(ctx: MutationCtx, actionId: Id<"actions">, opts
         ...(customer ? [`Customer: ${customer.name}, ${Math.floor((now - customer.signup_at) / DAY_MS)} days, ${customer.plan} plan`] : []),
         `Params: ${JSON.stringify(params)}`,
       ];
-      await ctx.db.insert("founder_inbox", {
+      await notifyFounder(ctx, {
         kind: "action",
         ref: actionId,
         title: `Approve ${action.type}${amount !== undefined ? ` ${dollars(amount)}` : ""}?`,
         body: lines.join("\n"),
         options: [{ label: "Approve" }, { label: "Deny" }],
-        status: "open",
-        created_at: now,
       });
       break;
     }

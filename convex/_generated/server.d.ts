@@ -36,6 +36,7 @@ type Env = {
   readonly CO_TOKEN_SECRET: string | undefined;
   readonly CREAO_API_KEY: string | undefined;
   readonly CREAO_WEBHOOK_TOKEN: string | undefined;
+  readonly DEMO_TOOLS: string | undefined;
   readonly NESSIE_API_KEY: string | undefined;
 };
 

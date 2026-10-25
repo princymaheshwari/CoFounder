@@ -91,6 +91,8 @@ npm run dev               # frontend
 npx convex run seed:config   # seed agents + channels (rooms) rows from convex/seed.config.ts
 npx convex run health:check  # confirm CREAO_API_KEY reaches the API Trigger
 npx convex run health:gateway '{"match":"anthropic"}'  # confirm the AI Gateway token and list model ids
+npx convex run story:resetInternal   # demo: clear conversations, decisions and rules (keeps company, customers, R7)
+npx convex run story:start '{"act":"double_charge"}'   # demo acts: double_charge | posts | after_rule (also buttons in the app)
 npx convex run nessie:seedNessie   # seed the Nessie sandbox + customers/ledger_mirror/tickets (idempotent)
 npx convex run nessie:syncLedger   # mirror Nessie into ledger_mirror now (cron runs it every 10 min)
 npm test                  # vitest (convex-test for functions)
@@ -108,6 +110,7 @@ npx convex env set NAME value   # set a backend secret
 | `APIFY_WEBHOOK_TOKEN` | random string appended to Apify webhook URL |
 | `CO_TOKEN_SECRET` | HMAC secret for task-scoped `co` tokens |
 | `AI_GATEWAY_URL` | optional override of `https://ai-gateway.convex.dev` (spec 11 points it at a broken URL to test the Jev failure path) |
+| `DEMO_TOOLS` | `on` enables story mode and the demo reset (`convex/story.ts`). Leave unset in production |
 
 Agent App IDs and each agent's input field id are data, stored in the `agents` table by the seed, not env vars. Channels (`rooms` table) are Convex-only.
 

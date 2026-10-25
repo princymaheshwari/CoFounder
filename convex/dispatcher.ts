@@ -87,7 +87,14 @@ async function assignArgs(ctx: MutationCtx, taskId: Id<"tasks">): Promise<{ args
   };
 }
 
+const STORY_REPLY_MS = 2_500;
+
 async function enqueueStart(ctx: MutationCtx, room: Id<"rooms">, args: StartArgs): Promise<void> {
+  // Story mode (convex/story.ts): a recorded reply stands in for the Creao run.
+  if ((await ctx.db.get(args.taskId))?.mode === "replay") {
+    await ctx.scheduler.runAfter(STORY_REPLY_MS, internal.story.reply, args);
+    return;
+  }
   const channel = await ctx.db.get(room);
   await pools[channel?.department ?? "none"].enqueueAction(ctx, internal.dispatcher.startRunForTask, args);
 }

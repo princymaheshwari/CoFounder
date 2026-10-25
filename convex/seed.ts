@@ -26,7 +26,7 @@ const R7_SUPPORT = [
   { amount_cents: 4000, refund_reason: "billing_error", customer_tenure_days: 95 },
 ] as const;
 
-async function seedRules(ctx: MutationCtx): Promise<void> {
+export async function seedRules(ctx: MutationCtx): Promise<void> {
   const existing = await ctx.db
     .query("rules")
     .withIndex("by_type_status", (q) => q.eq("action_type", "refund"))

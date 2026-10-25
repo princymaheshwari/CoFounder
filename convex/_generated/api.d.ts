@@ -20,6 +20,7 @@ import type * as crons from "../crons.js";
 import type * as dev from "../dev.js";
 import type * as dispatcher from "../dispatcher.js";
 import type * as executor from "../executor.js";
+import type * as feed from "../feed.js";
 import type * as gate from "../gate.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
@@ -43,6 +44,7 @@ import type * as nessieApi from "../nessieApi.js";
 import type * as rules from "../rules.js";
 import type * as seed from "../seed.js";
 import type * as seedData from "../seedData.js";
+import type * as story from "../story.js";
 import type * as tasks from "../tasks.js";
 
 import type {
@@ -64,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   dev: typeof dev;
   dispatcher: typeof dispatcher;
   executor: typeof executor;
+  feed: typeof feed;
   gate: typeof gate;
   health: typeof health;
   http: typeof http;
@@ -87,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   rules: typeof rules;
   seed: typeof seed;
   seedData: typeof seedData;
+  story: typeof story;
   tasks: typeof tasks;
 }>;
 

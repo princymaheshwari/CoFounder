@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { internalAction, internalMutation, query, type MutationCtx } from "./_generated/server";
 import { appendMessage, audit, getConfig } from "./channels";
+import { recordStoryExecution } from "./story";
 import { RateLimitedError } from "./creao/http";
 import { getRun, replyText, startRun, webhookUrl } from "./creao/runs";
 import { rateLimiter } from "./dispatcher";
@@ -46,6 +47,8 @@ export const configure = internalMutation({
 // Starts the execution an allowed or approved action needs. Called by the gate (allow) and by the founder's
 // approval, in their transaction, so only a committed decision executes anything.
 export async function scheduleExecution(ctx: MutationCtx, action: Doc<"actions">, by: "gate" | "founder"): Promise<void> {
+  // Story mode records the outcome instead of calling Nessie, the Executor or the post queue.
+  if ((await ctx.db.get(action.task))?.mode === "replay") return await recordStoryExecution(ctx, action);
   const executor = CATALOG[action.type].executor;
   switch (executor) {
     case "nessie":

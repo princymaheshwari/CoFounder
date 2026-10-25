@@ -17,6 +17,8 @@ const app = defineApp({
     CO_TOKEN_SECRET: v.optional(v.string()),
     // Overrides https://ai-gateway.convex.dev (spec 11 sets it to a broken URL to test the Jev failure path).
     AI_GATEWAY_URL: v.optional(v.string()),
+    // "on" enables story mode and the demo reset (convex/story.ts). Leave unset in production.
+    DEMO_TOOLS: v.optional(v.string()),
   },
 });
 

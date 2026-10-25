@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalAction, internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { appendMessage, audit, getConfig } from "./channels";
+import { appendMessage, audit, getConfig, notifyFounder } from "./channels";
 import { decisionFeatures } from "./gate";
 import { formatDigest } from "./lib/envelope";
 import {
@@ -20,7 +20,7 @@ import {
   overrides,
   replay,
   ruleCandidateSchema,
-  ruleInScope,
+  ruleForAssign,
   ruleToSentence,
   type DecisionRow,
   type DeptOf,
@@ -104,9 +104,9 @@ async function previousVersion(ctx: QueryCtx, rule: RuleLike): Promise<Doc<"rule
 // ---------------------------------------------------------------- digest
 
 // Channels a rule reaches: those with an enabled role agent the rule is in scope for.
-async function roomsFor(ctx: QueryCtx, rule: Pick<Doc<"rules">, "scope">): Promise<Doc<"rooms">[]> {
+async function roomsFor(ctx: QueryCtx, rule: Pick<Doc<"rules">, "scope" | "action_type">): Promise<Doc<"rooms">[]> {
   const agents = (await ctx.db.query("agents").take(100)).filter((a) => a.enabled && a.kind === "role");
-  const names = new Set(agents.filter((a) => ruleInScope({ status: "active", scope: rule.scope }, a.role, a.department)).flatMap((a) => a.rooms));
+  const names = new Set(agents.filter((a) => ruleForAssign({ status: "active", scope: rule.scope, action_type: rule.action_type }, a.role, a.department, 0)).flatMap((a) => a.rooms));
   const rooms = await ctx.db.query("rooms").take(50);
   return rooms.filter((r) => names.has(r.name));
 }
@@ -117,13 +117,12 @@ export async function postRulesDigest(ctx: MutationCtx, roomId: Id<"rooms">): Pr
   if (!room) return null;
   const now = Date.now();
   const agents = (await ctx.db.query("agents").take(100)).filter((a) => a.enabled && a.kind === "role" && a.rooms.includes(room.name));
-  const active = (await ctx.db.query("rules").take(500)).filter(
-    (r) => (r.expires_at === undefined || r.expires_at > now) && agents.some((a) => ruleInScope(r, a.role, a.department)),
-  );
+  // Same relevance as the ASSIGN mirror: in scope for someone here, of a type someone here proposes.
+  const active = (await ctx.db.query("rules").take(500)).filter((r) => agents.some((a) => ruleForAssign(r, a.role, a.department, now)));
   return await appendMessage(ctx, { room: room._id, sender_kind: "system", sender_name: "Dispatcher", text: formatDigest(room.name, active.map((r) => r.text)) });
 }
 
-async function digestAffected(ctx: MutationCtx, rule: Pick<Doc<"rules">, "scope">): Promise<number> {
+async function digestAffected(ctx: MutationCtx, rule: Pick<Doc<"rules">, "scope" | "action_type">): Promise<number> {
   const rooms = await roomsFor(ctx, rule);
   for (const r of rooms) await postRulesDigest(ctx, r._id);
   return rooms.length;
@@ -265,14 +264,12 @@ export async function proposeCandidate(
     created_at: now,
   });
   const diff = diffText(rule, { label, ...(previous ? { previous: { ...ruleLike(previous), label: labelOf(previous.text) } } : {}), agreement });
-  await ctx.db.insert("founder_inbox", {
+  await notifyFounder(ctx, {
     kind: "rule",
     ref: ruleId,
     title: `Approve rule ${label} for ${a.actionType}?`,
     body: [diff, ...(parsed.data.rationale ? ["", `Why: ${parsed.data.rationale}`] : []), "", `Expires in 30 days unless renewed.`].join("\n"),
     options: [{ label: "Approve" }, { label: "Reject" }],
-    status: "open",
-    created_at: now,
   });
   await audit(ctx, { actor: "rules", kind: "rule_proposed", ref: a.actionType, detail: { ruleId, label, agreement, supporting: supporting.length, cost_usd: a.cost_usd ?? null } });
   return { ok: true, ruleId, ...agreement };
@@ -297,7 +294,7 @@ export async function decideRule(ctx: MutationCtx, item: Doc<"founder_inbox">, c
     decided_by: "founder",
     created_at: now,
   });
-  await ctx.db.patch(item._id, { status: "decided" });
+  await ctx.db.patch(item._id, { status: "decided", decision: { choice, ...(reason ? { reason } : {}), at: now } });
   if (choice === "deny") {
     await ctx.db.patch(rule._id, { status: "revoked" });
     await audit(ctx, { actor: "founder", kind: "rule_rejected_by_founder", ref: rule._id, detail: { reason: reason ?? null } });

@@ -30,3 +30,28 @@ export async function getConfig<T>(ctx: MutationCtx, key: string, fallback: T): 
     .unique();
   return row ? (row.value as T) : fallback;
 }
+
+type FounderRequest = Pick<Doc<"founder_inbox">, "kind" | "ref" | "title" | "body" | "options">;
+
+// The founder is asked in one place only: every request is a founder_inbox row posted as a message in
+// #founder-desk (in the package task's thread when there is one) and decided from that message.
+export async function notifyFounder(ctx: MutationCtx, req: FounderRequest, opts: { task?: Id<"tasks"> } = {}): Promise<Id<"founder_inbox">> {
+  const now = Date.now();
+  const inboxId = await ctx.db.insert("founder_inbox", { ...req, status: "open", created_at: now });
+  const desk = await ctx.db
+    .query("rooms")
+    .withIndex("by_name", (q) => q.eq("name", "#founder-desk"))
+    .unique();
+  if (desk) {
+    const task = opts.task ? await ctx.db.get(opts.task) : null;
+    await appendMessage(ctx, {
+      room: desk._id,
+      ...(task && task.room === desk._id ? { task: task._id } : {}),
+      sender_kind: "system",
+      sender_name: "Dispatcher",
+      text: `[Dispatcher] @Founder ${req.title}`,
+      inbox: inboxId,
+    });
+  }
+  return inboxId;
+}

@@ -1,7 +1,7 @@
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { appendMessage, audit } from "./channels";
+import { appendMessage, audit, notifyFounder } from "./channels";
 import { assign, rerun } from "./dispatcher";
 import { scheduleExecution } from "./executor";
 import { currentBudget, decisionFeatures, gateAction } from "./gate";
@@ -342,15 +342,17 @@ export async function onPackage(ctx: MutationCtx, task: Doc<"tasks">, env: Envel
     return;
   }
   const p = env.package;
-  const inboxId = await ctx.db.insert("founder_inbox", {
-    kind: "package",
-    ref: issue._id,
-    title: clip(`Decide: ${p.situation.split(/\r?\n/)[0]}`, 140),
-    body: packageBody(p, await actionLines(ctx, issue.actions ?? [])),
-    options: [...p.options.map((o) => ({ label: o.label, ...(o.action !== undefined ? { action: o.action } : {}) }))],
-    status: "open",
-    created_at: Date.now(),
-  });
+  const inboxId = await notifyFounder(
+    ctx,
+    {
+      kind: "package",
+      ref: issue._id,
+      title: clip(`Decide: ${p.situation.split(/\r?\n/)[0]}`, 140),
+      body: packageBody(p, await actionLines(ctx, issue.actions ?? [])),
+      options: [...p.options.map((o) => ({ label: o.label, ...(o.action !== undefined ? { action: o.action } : {}) }))],
+    },
+    { task: task._id },
+  );
   await ctx.db.patch(issue._id, { level: "founder" });
   await transition(ctx, task, "done", "package", { messageId, inboxId });
   await audit(ctx, { actor: "cofounder", kind: "package_ready", ref: task._id, detail: { issueId: issue._id, inboxId, chain: task.chain_id } });
@@ -367,15 +369,11 @@ export async function packageFallback(ctx: MutationCtx, issue: Doc<"issues">, wh
     ...issues.map((i) => `- ${i.raised_by_role} (${i.kind}): ${clip(i.summary, 250)}; attempts: ${i.attempts.join("; ") || "none"}`),
     ...((issue.actions ?? []).length ? ["Actions awaiting your decision:", ...(await actionLines(ctx, issue.actions ?? []))] : []),
   ].join("\n");
-  const inboxId = await ctx.db.insert("founder_inbox", {
-    kind: "package",
-    ref: issue._id,
-    title: clip(`Decide: ${issue.summary}`, 140),
-    body,
-    options: [{ label: "Approve" }, { label: "Deny" }],
-    status: "open",
-    created_at: Date.now(),
-  });
+  const inboxId = await notifyFounder(
+    ctx,
+    { kind: "package", ref: issue._id, title: clip(`Decide: ${issue.summary}`, 140), body, options: [{ label: "Approve" }, { label: "Deny" }] },
+    issue.package_task ? { task: issue.package_task } : {},
+  );
   await ctx.db.patch(issue._id, { level: "founder", status: "escalated" });
   await audit(ctx, { actor: "dispatcher", kind: "package_fallback", ref: issue.task, detail: { issueId: issue._id, inboxId, why } });
 }
@@ -530,7 +528,7 @@ export async function recordFounderDecision(
   for (const i of issues) await resolveOne(ctx, i, verdict, "founder");
   for (const t of tasks) if (t.status === "escalated") await transition(ctx, t, "done", "founder_decision", { inboxId: a.inboxId });
 
-  await ctx.db.patch(a.inboxId, { status: "decided" });
+  await ctx.db.patch(a.inboxId, { status: "decided", decision: { choice: a.choice, ...(a.reason ? { reason: a.reason } : {}), at: now } });
   // Spec 12: enough consistent founder decisions of a type become a proposed rule.
   for (const actionType of decidedTypes) await ctx.scheduler.runAfter(0, internal.rules.maybeInduce, { actionType });
   await audit(ctx, {

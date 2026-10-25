@@ -81,6 +81,7 @@ export default defineSchema({
     envelope: v.optional(v.any()),
     envelope_error: v.optional(v.string()),
     creao_run_id: v.optional(v.string()),
+    inbox: v.optional(v.id("founder_inbox")), // a founder request posted in #founder-desk (decided in the channel)
     created_at: v.number(),
   })
     .index("by_room_seq", ["room", "seq"])
@@ -309,6 +310,7 @@ export default defineSchema({
     body: v.string(),
     options: v.optional(v.array(v.object({ label: v.string(), action: v.optional(v.any()) }))),
     status: vInboxStatus,
+    decision: v.optional(v.object({ choice: vDecisionChoice, reason: v.optional(v.string()), at: v.number() })),
     created_at: v.number(),
   }).index("by_status", ["status"]),
 
