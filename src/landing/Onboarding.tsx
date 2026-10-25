@@ -243,7 +243,7 @@ export function Onboarding() {
                   : step === "done"
                     ? "Each recurring task has a thread in its channel. The Dispatcher just started the first run of each one on a live agent."
                     : source === "claude"
-                      ? `Planned by Claude from what you wrote about ${form.name}. Untick anything you don't want.`
+                      ? "The main cofounder agent finds the recurring tasks to automate and assigns them to relevant employees. UNSELECT any task you don't want to get automated."
                       : "Cofounder couldn't reach the planner, so this is the starter plan. Untick anything you don't want."}
               </p>
             </div>
