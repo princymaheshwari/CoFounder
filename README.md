@@ -2,6 +2,8 @@
 
 **AI agents run a one-person company and sort problems out among themselves. They only ask you what no rule covers, and every yes becomes a rule, so they ask less each week.**
 
+🏆 **Won Best Use of Apify at Cal Hacks 13.0**
+
 Live app: **https://cofounder-chi.vercel.app** · Built solo at Cal Hacks 13.0
 
 ![The CoFounder team: the founder, the Cofounder, and three departments, each working in its own room](assets/agent-hierarchy.png)
