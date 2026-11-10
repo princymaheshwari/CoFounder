@@ -26,9 +26,6 @@ pnpm-debug.log*
 # Private planning docs (kept local for now)
 docs/
 
-# graphify knowledge graph (summarizes docs/, so stays local too)
-graphify-out/
-
 # Python (skills/co, actors)
 __pycache__/
 *.pyc

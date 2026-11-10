@@ -1,0 +1,489 @@
+{
+  "communities": {
+    "0": [
+      "claude_apify_api",
+      "claude_convex_ai_gateway",
+      "claude_invariant_budget_in_gate_txn",
+      "claude_invariant_gate_is_code",
+      "claude_jev",
+      "claude_stack",
+      "docs_specs_01_schema_table_budgets",
+      "docs_specs_01_schema_table_rules",
+      "docs_specs_01_schema_table_signals",
+      "docs_specs_05_tasks_and_orchestration_routing_table",
+      "docs_specs_07_gate_evaluate_gate",
+      "docs_specs_13_apify_signals_apify_callback",
+      "docs_specs_13_apify_signals_apify_tasks",
+      "docs_specs_13_apify_signals_inject_signal",
+      "docs_specs_13_apify_signals_significance_scoring",
+      "docs_specs_13_apify_signals_spec",
+      "docs_specs_15_standups_cofounder_contradiction_check",
+      "docs_specs_15_standups_cofounder_objections",
+      "docs_specs_15_standups_cofounder_spec",
+      "docs_specs_15_standups_cofounder_standups",
+      "docs_specs_15_standups_cofounder_weekly_memo",
+      "docs_specs_17_company_radar_actor_radar_actor",
+      "docs_specs_17_company_radar_actor_spec",
+      "docs_system_design_absence_mode",
+      "docs_system_design_action_catalog",
+      "docs_system_design_apify_sensing_layer",
+      "docs_system_design_authority_gate",
+      "docs_system_design_flow_b",
+      "docs_system_design_flow_c",
+      "docs_system_design_flow_d",
+      "docs_system_design_flow_e",
+      "docs_system_design_issue_ladder",
+      "docs_system_design_open_decisions",
+      "docs_system_design_prize_tracks",
+      "docs_system_design_pushback",
+      "docs_system_design_reliability_security",
+      "docs_system_design_rule_learning_loop",
+      "docs_system_design_rule_schema",
+      "docs_system_design_system_design",
+      "docs_system_design_task_lifecycle"
+    ],
+    "1": [
+      "claude_nessie_api",
+      "docs_specs_01_schema_table_decisions",
+      "docs_specs_01_schema_table_founder_inbox",
+      "docs_specs_01_schema_table_issues",
+      "docs_specs_01_schema_table_ledger_mirror",
+      "docs_specs_01_schema_table_messages",
+      "docs_specs_07_gate_catalog_ts",
+      "docs_specs_07_gate_evaluate_pure",
+      "docs_specs_07_gate_features_fn",
+      "docs_specs_07_gate_rule_r7",
+      "docs_specs_07_gate_spec",
+      "docs_specs_08_nessie_duplicate_charge_incident",
+      "docs_specs_08_nessie_nessie_client",
+      "docs_specs_08_nessie_nessie_seed",
+      "docs_specs_08_nessie_spec",
+      "docs_specs_09_issue_ladder_founder_package",
+      "docs_specs_09_issue_ladder_inbox_page",
+      "docs_specs_09_issue_ladder_issues_module",
+      "docs_specs_09_issue_ladder_record_founder_decision",
+      "docs_specs_09_issue_ladder_spec",
+      "docs_specs_11_jev_labels_label_action",
+      "docs_specs_11_jev_labels_label_questions",
+      "docs_specs_11_jev_labels_spec",
+      "docs_specs_12_rule_learning_induce_rule",
+      "docs_specs_12_rule_learning_lib_rules",
+      "docs_specs_12_rule_learning_rule_mirrors",
+      "docs_specs_12_rule_learning_rule_mutations",
+      "docs_specs_12_rule_learning_spec",
+      "docs_specs_14_founder_app_app_pages",
+      "docs_specs_16_replay_and_metrics_metrics",
+      "docs_specs_16_replay_and_metrics_replay_engine",
+      "docs_specs_16_replay_and_metrics_spec",
+      "docs_system_design_demo_and_metrics",
+      "docs_system_design_flow_a"
+    ],
+    "2": [
+      "agents_roles_cofounder",
+      "agents_roles_content",
+      "agents_roles_customer_manager",
+      "agents_roles_finance_manager",
+      "agents_roles_ledger",
+      "agents_roles_market_intel",
+      "agents_roles_marketing_manager",
+      "agents_roles_retention",
+      "agents_roles_roles_doc",
+      "agents_roles_shared_preamble",
+      "agents_roles_spend",
+      "agents_roles_support",
+      "agents_setup_01_support_setup_script",
+      "agents_setup_02_ledger_setup_script",
+      "agents_setup_03_customer_manager_setup_script",
+      "agents_setup_04_finance_manager_setup_script",
+      "agents_setup_05_cofounder_setup_script",
+      "agents_setup_06_retention_setup_script",
+      "agents_setup_07_spend_setup_script",
+      "agents_setup_08_marketing_manager_setup_script",
+      "agents_setup_09_market_intel_setup_script",
+      "agents_setup_10_content_setup_script",
+      "agents_setup_readme_setup_tracker",
+      "docs_system_design_org_chart",
+      "docs_system_design_room_customer",
+      "docs_system_design_room_finance",
+      "docs_system_design_room_founder_desk",
+      "docs_system_design_room_leadership",
+      "docs_system_design_room_marketing"
+    ],
+    "3": [
+      "claude_creao_api_trigger",
+      "claude_creao_cli_unavailable",
+      "claude_invariant_only_dispatcher_triggers",
+      "claude_out_of_scope",
+      "docs_specs_00_setup_and_accounts_spec",
+      "docs_specs_02_creao_clients_creao_fetch",
+      "docs_specs_02_creao_clients_runs_client",
+      "docs_specs_02_creao_clients_spec",
+      "docs_specs_02_creao_clients_transport_test",
+      "docs_specs_03_message_protocol_action_params",
+      "docs_specs_03_message_protocol_cofounder_envelope",
+      "docs_specs_03_message_protocol_company_block",
+      "docs_specs_03_message_protocol_message_types",
+      "docs_specs_03_message_protocol_parse_envelope",
+      "docs_specs_03_message_protocol_spec",
+      "docs_specs_04_dispatcher_and_runs_assign_task",
+      "docs_specs_04_dispatcher_and_runs_creao_callback",
+      "docs_specs_04_dispatcher_and_runs_ingest_run_record_reply",
+      "docs_specs_04_dispatcher_and_runs_poll_runs",
+      "docs_specs_04_dispatcher_and_runs_run_limits",
+      "docs_specs_04_dispatcher_and_runs_spec",
+      "docs_specs_05_tasks_and_orchestration_check_stuck_tasks",
+      "docs_specs_05_tasks_and_orchestration_spec",
+      "docs_specs_05_tasks_and_orchestration_task_transitions",
+      "docs_specs_10_executor_and_connectors_run_executor",
+      "docs_specs_10_executor_and_connectors_spec",
+      "docs_specs_readme_build_order",
+      "docs_system_design_dispatcher",
+      "docs_system_design_run_receiver"
+    ],
+    "4": [
+      "agents_roles_executor",
+      "agents_setup_11_executor_setup_script",
+      "claude_cofounder_project",
+      "claude_company_agnostic_agents",
+      "claude_conventions",
+      "claude_env_vars",
+      "claude_how_to_work",
+      "claude_invariant_agents_never_execute",
+      "claude_invariant_every_message_validated",
+      "claude_invariant_graph_limits",
+      "claude_invariant_keys_in_convex_env",
+      "claude_lumen_notes",
+      "claude_plan_constraints",
+      "docs_specs_01_schema_table_company",
+      "docs_specs_01_schema_table_runs",
+      "docs_specs_05_tasks_and_orchestration_graph_limit_check",
+      "docs_specs_05_tasks_and_orchestration_task_token",
+      "docs_specs_06_co_cli_skill_co_cli",
+      "docs_specs_06_co_cli_skill_co_http_routes",
+      "docs_specs_06_co_cli_skill_co_views",
+      "docs_specs_06_co_cli_skill_spec",
+      "scripts_set_env",
+      "scripts_set_env_sh__entry"
+    ],
+    "5": [
+      "package",
+      "package_name",
+      "package_private",
+      "package_type",
+      "package_version",
+      "ref_ai",
+      "ref_convex_dev_ai_sdk_provider",
+      "ref_convex_dev_eslint_plugin",
+      "ref_edge_runtime_vm",
+      "ref_eslint",
+      "ref_eslint_js",
+      "ref_eslint_plugin_react_hooks",
+      "ref_eslint_plugin_react_refresh",
+      "ref_globals",
+      "ref_prettier",
+      "ref_tailwindcss",
+      "ref_types_node",
+      "ref_types_react",
+      "ref_types_react_dom",
+      "ref_typescript",
+      "ref_typescript_eslint",
+      "ref_typescript_native",
+      "ref_zod"
+    ],
+    "6": [
+      "claude_invariant_everything_audited",
+      "claude_terminology_rooms",
+      "convex_seed_config",
+      "convex_seed_config_agents",
+      "convex_seed_config_rooms",
+      "docs_specs_00_setup_and_accounts_seed_config",
+      "docs_specs_01_schema_action_status_values",
+      "docs_specs_01_schema_shared_literals",
+      "docs_specs_01_schema_spec",
+      "docs_specs_01_schema_table_actions",
+      "docs_specs_01_schema_table_agents",
+      "docs_specs_01_schema_table_audit_log",
+      "docs_specs_01_schema_table_config",
+      "docs_specs_01_schema_table_customers",
+      "docs_specs_01_schema_table_events",
+      "docs_specs_01_schema_table_founder",
+      "docs_specs_01_schema_table_post_queue",
+      "docs_specs_01_schema_table_rooms",
+      "docs_specs_01_schema_table_tasks",
+      "docs_specs_01_schema_table_tickets",
+      "docs_specs_01_schema_task_status_values"
+    ],
+    "7": [
+      "package_devdependencies",
+      "package_devdependencies_convex_dev_eslint_plugin",
+      "package_devdependencies_convex_test",
+      "package_devdependencies_edge_runtime_vm",
+      "package_devdependencies_eslint",
+      "package_devdependencies_eslint_js",
+      "package_devdependencies_eslint_plugin_react_hooks",
+      "package_devdependencies_eslint_plugin_react_refresh",
+      "package_devdependencies_globals",
+      "package_devdependencies_prettier",
+      "package_devdependencies_tailwindcss",
+      "package_devdependencies_tailwindcss_vite",
+      "package_devdependencies_types_node",
+      "package_devdependencies_types_react",
+      "package_devdependencies_types_react_dom",
+      "package_devdependencies_typescript",
+      "package_devdependencies_typescript_eslint",
+      "package_devdependencies_typescript_native",
+      "package_devdependencies_vite",
+      "package_devdependencies_vitejs_plugin_react",
+      "package_devdependencies_vitest"
+    ],
+    "8": [
+      "convex_generated_api",
+      "convex_generated_api_api",
+      "convex_generated_api_internal",
+      "convex_schema",
+      "ref_convex",
+      "ref_convex_test",
+      "ref_vitest",
+      "src_app",
+      "tests_health_test",
+      "tests_health_test_modules",
+      "vitest_config"
+    ],
+    "9": [
+      "json",
+      "os",
+      "scripts_test_api_trigger",
+      "scripts_test_api_trigger_call",
+      "scripts_test_api_trigger_rationale_1",
+      "scripts_test_api_trigger_show",
+      "scripts_test_api_trigger_start_and_wait",
+      "sys",
+      "time",
+      "urllib_error",
+      "urllib_request"
+    ],
+    "10": [
+      "package_dependencies",
+      "package_dependencies_ai",
+      "package_dependencies_convex",
+      "package_dependencies_convex_dev_aggregate",
+      "package_dependencies_convex_dev_ai_sdk_provider",
+      "package_dependencies_convex_dev_rate_limiter",
+      "package_dependencies_convex_dev_workflow",
+      "package_dependencies_convex_dev_workpool",
+      "package_dependencies_react",
+      "package_dependencies_react_dom",
+      "package_dependencies_zod"
+    ],
+    "11": [
+      "package_scripts",
+      "package_scripts_build",
+      "package_scripts_dev",
+      "package_scripts_dev_backend",
+      "package_scripts_dev_frontend",
+      "package_scripts_lint",
+      "package_scripts_preview",
+      "package_scripts_test",
+      "package_scripts_test_watch",
+      "package_scripts_typecheck"
+    ],
+    "12": [
+      "convex_generated_server",
+      "convex_generated_server_env",
+      "convex_generated_server_internalaction",
+      "convex_generated_server_query",
+      "convex_health",
+      "convex_health_check",
+      "convex_health_ping",
+      "docs_specs_00_setup_and_accounts_health_checks"
+    ],
+    "13": [
+      "docs_specs_14_founder_app_spec",
+      "ref_react",
+      "ref_react_dom",
+      "src_app_app",
+      "src_index",
+      "src_main",
+      "src_main_convex"
+    ],
+    "14": [
+      "convex_convex_config",
+      "convex_convex_config_app",
+      "ref_convex_dev_aggregate",
+      "ref_convex_dev_rate_limiter",
+      "ref_convex_dev_workflow",
+      "ref_convex_dev_workpool"
+    ],
+    "15": [
+      "ref_path",
+      "ref_tailwindcss_vite",
+      "ref_vite",
+      "ref_vitejs_plugin_react",
+      "vite_config"
+    ]
+  },
+  "cohesion": {
+    "0": 0.0782051282051282,
+    "1": 0.09803921568627451,
+    "2": 0.1748768472906404,
+    "3": 0.14285714285714285,
+    "4": 0.11462450592885376,
+    "5": 0.08695652173913043,
+    "6": 0.10476190476190476,
+    "7": 0.09523809523809523,
+    "8": 0.21818181818181817,
+    "9": 0.2909090909090909,
+    "10": 0.18181818181818182,
+    "11": 0.2,
+    "12": 0.2857142857142857,
+    "13": 0.2857142857142857,
+    "14": 0.3333333333333333,
+    "15": 0.4
+  },
+  "gods": [
+    {
+      "id": "docs_specs_01_schema_spec",
+      "label": "Spec 01: Schema",
+      "degree": 33
+    },
+    {
+      "id": "docs_system_design_system_design",
+      "label": "System Design v4 (API Trigger)",
+      "degree": 21
+    },
+    {
+      "id": "docs_specs_readme_build_order",
+      "label": "Spec build order",
+      "degree": 19
+    },
+    {
+      "id": "claude_cofounder_project",
+      "label": "Cofounder (project)",
+      "degree": 18
+    },
+    {
+      "id": "docs_specs_07_gate_spec",
+      "label": "Spec 07: Gate and action catalog",
+      "degree": 15
+    },
+    {
+      "id": "agents_roles_roles_doc",
+      "label": "Creao agent role prompts",
+      "degree": 14
+    },
+    {
+      "id": "agents_roles_shared_preamble",
+      "label": "Shared agent preamble",
+      "degree": 14
+    },
+    {
+      "id": "docs_specs_05_tasks_and_orchestration_spec",
+      "label": "Spec 05: Tasks, routing, orchestration",
+      "degree": 14
+    },
+    {
+      "id": "docs_specs_09_issue_ladder_spec",
+      "label": "Spec 09: Issue ladder and founder inbox",
+      "degree": 14
+    },
+    {
+      "id": "docs_specs_13_apify_signals_spec",
+      "label": "Spec 13: Apify signals",
+      "degree": 14
+    }
+  ],
+  "surprises": [
+    {
+      "source": "ping",
+      "target": "health:check / health:gateway",
+      "source_files": [
+        "convex/health.ts",
+        "docs/specs/00-setup-and-accounts.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "implements",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (code ↔ doc); connects across different repos/directories; peripheral node `ping` unexpectedly reaches hub `health:check / health:gateway`"
+    },
+    {
+      "source": "check",
+      "target": "health:check / health:gateway",
+      "source_files": [
+        "convex/health.ts",
+        "docs/specs/00-setup-and-accounts.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "implements",
+      "why": "crosses file types (code ↔ doc); connects across different repos/directories; peripheral node `check` unexpectedly reaches hub `health:check / health:gateway`"
+    },
+    {
+      "source": "App()",
+      "target": "Spec 14: Founder app",
+      "source_files": [
+        "src/App.tsx",
+        "docs/specs/14-founder-app.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "implements",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (code ↔ doc); connects across different repos/directories"
+    },
+    {
+      "source": "How to work in this repo",
+      "target": "Spec build order",
+      "source_files": [
+        "CLAUDE.md",
+        "docs/specs/README.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "connects across different repos/directories; bridges separate communities; peripheral node `How to work in this repo` unexpectedly reaches hub `Spec build order`"
+    },
+    {
+      "source": "Nessie client (convex/nessie.ts)",
+      "target": "Invariant 1: Agents never execute",
+      "source_files": [
+        "docs/specs/08-nessie.md",
+        "CLAUDE.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "implements",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `Spec 01: Schema` connect `Community 6` to `Community 0`, `Community 1`, `Community 3`, `Community 4`, `Community 8`?",
+      "why": "High betweenness centrality (0.336) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `@convex-dev/ai-sdk-provider`, `ai`, `zod` to the rest of the system?",
+      "why": "29 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 0` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.0782051282051282 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `Spec 00: Setup and accounts` connect `Community 3` to `Community 1`, `Community 4`, `Community 6`, `Community 12`, `Community 14`?",
+      "why": "High betweenness centrality (0.252) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 1` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.09803921568627451 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `convex` connect `Community 8` to `Community 13`, `Community 5`, `Community 14`?",
+      "why": "High betweenness centrality (0.230) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 3` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.14285714285714285 - nodes in this community are weakly interconnected."
+    }
+  ]
+}
