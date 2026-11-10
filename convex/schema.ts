@@ -282,9 +282,12 @@ export default defineSchema({
     significance: v.number(), // 0–1
     evidence_url: v.string(),
     embedding: v.optional(v.array(v.float64())),
+    change_hash: v.optional(v.string()), // change monitors: dedupe key with url (spec 13)
     consumed: v.boolean(),
     created_at: v.number(),
-  }).index("by_room", ["room"]),
+  })
+    .index("by_room", ["room"])
+    .index("by_url_and_change_hash", ["url", "change_hash"]),
 
   post_queue: defineTable({
     action: v.id("actions"),

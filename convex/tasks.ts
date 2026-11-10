@@ -34,7 +34,7 @@ export async function transition(
   return { ...task, ...patch };
 }
 
-async function roomByName(ctx: MutationCtx, name: string): Promise<Id<"rooms">> {
+export async function roomByName(ctx: MutationCtx, name: string): Promise<Id<"rooms">> {
   const room = await ctx.db
     .query("rooms")
     .withIndex("by_name", (q) => q.eq("name", name))

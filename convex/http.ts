@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { env, httpAction } from "./_generated/server";
+import { apifyCallback } from "./apify";
 import { coData, coHistory, coRadar } from "./co";
 
 const http = httpRouter();
@@ -31,6 +32,9 @@ http.route({
     return new Response(null, { status: 200 });
   }),
 });
+
+// Apify change monitors (spec 13): POST /apify-callback?token=<APIFY_WEBHOOK_TOKEN>&task=<monitor task name>.
+http.route({ path: "/apify-callback", method: "POST", handler: apifyCallback });
 
 // co CLI (spec 06): task-token reads for agents.
 http.route({ path: "/co/data", method: "GET", handler: coData });
