@@ -68,6 +68,10 @@ With `DEMO_TOOLS=on`, the sidebar's **Demo story** replays recorded agent replie
 
 `npx convex run story:resetInternal` clears the demo, including its refunds in Nessie. `npx convex run story:primeLive` sends a real double-charge ticket through the live Creao agents instead.
 
+### Apify change monitors
+
+Scheduled runs of [`monema/apify-change-monitor`](https://apify.com/monema/apify-change-monitor) watch competitor pricing, community, reviews, vendor pricing and competitor careers pages. Each Apify Task has a webhook on `ACTOR.RUN.SUCCEEDED` to `https://<deployment>.convex.site/apify-callback?token=<APIFY_WEBHOOK_TOKEN>&task=<task>`, where `<task>` is one of `competitor-pricing`, `community`, `reviews`, `vendor-pricing` or `competitor-careers`. Convex pulls the run's dataset, scores each change, drops duplicates, and opens a task for anything scoring 0.6 or more. `npm run inject-signal -- vendor-price` (or `competitor-price`, `review`, `careers`) sends a realistic change through the same path for rehearsal.
+
 ## Repo layout
 
 ```
