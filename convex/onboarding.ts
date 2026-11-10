@@ -197,11 +197,42 @@ export const confirm = mutation({
   },
 });
 
+const PAUSE_KEY = "recurring_paused";
+
+async function recurringPaused(ctx: MutationCtx): Promise<boolean> {
+  const row = await ctx.db.query("config").withIndex("by_key", (q) => q.eq("key", PAUSE_KEY)).unique();
+  return row?.value === true;
+}
+
+// Stops (or resumes) every recurring run without deleting the schedule, e.g. while Creao credits are out.
+//   npx convex run onboarding:setRecurringPaused '{"paused":true}'
+// Resuming restarts each interval from now, so the runs missed while paused don't all fire at once.
+export const setRecurringPaused = internalMutation({
+  args: { paused: v.boolean() },
+  returns: v.object({ paused: v.boolean(), schedules: v.number() }),
+  handler: async (ctx, { paused }) => {
+    const row = await ctx.db.query("config").withIndex("by_key", (q) => q.eq("key", PAUSE_KEY)).unique();
+    if (row) await ctx.db.patch("config", row._id, { value: paused });
+    else await ctx.db.insert("config", { key: PAUSE_KEY, value: paused });
+    const active = await ctx.db
+      .query("recurring")
+      .withIndex("by_active_and_next_run_at", (q) => q.eq("active", true))
+      .take(MAX_RECURRING * 4);
+    const now = Date.now();
+    if (!paused) {
+      for (const r of active) if (r.every_ms) await ctx.db.patch("recurring", r._id, { next_run_at: nextRunAt(r.every_ms, now) });
+    }
+    await audit(ctx, { actor: "founder", kind: paused ? "recurring_paused" : "recurring_resumed", ref: PAUSE_KEY, detail: { schedules: active.length } });
+    return { paused, schedules: active.length };
+  },
+});
+
 // Cron (every minute): starts the next run of each due interval task, in its existing thread.
 export const runDue = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
+    if (await recurringPaused(ctx)) return 0;
     const now = Date.now();
     const due = await ctx.db
       .query("recurring")

@@ -154,6 +154,22 @@ describe("confirm and runDue", () => {
     });
   });
 
+  test("a pause stops every recurring run; resuming restarts the intervals from now", async () => {
+    const t = setup();
+    await t.mutation(internal.seed.config, {});
+    const created = await t.mutation(api.onboarding.confirm, { input: INPUT, tasks: DEFAULT_PLAN });
+    const spend = created.find((c) => c.title === "Vendor and credit spend check")!;
+    const before = await t.run(async (ctx) => (await ctx.db.query("tasks").collect()).length);
+    expect(await t.mutation(internal.onboarding.setRecurringPaused, { paused: true })).toMatchObject({ paused: true });
+    vi.setSystemTime(Date.now() + 100 * HOUR_MS);
+    expect(await t.mutation(internal.onboarding.runDue, {})).toBe(0);
+    expect(await t.run(async (ctx) => (await ctx.db.query("tasks").collect()).length)).toBe(before);
+    await t.mutation(internal.onboarding.setRecurringPaused, { paused: false });
+    expect(await t.mutation(internal.onboarding.runDue, {})).toBe(0); // nothing fires the moment it resumes
+    const row = await t.run(async (ctx) => (await ctx.db.get(spend.recurringId))!);
+    expect(Math.abs(row.next_run_at! - (Date.now() + 24 * HOUR_MS))).toBeLessThan(1000);
+  });
+
   test("a new ticket leaves a note in the ticket-triage thread", async () => {
     const t = setup();
     await t.mutation(internal.seed.config, {});
