@@ -8,6 +8,7 @@ import { jevDecide } from "./labels";
 import { jevState, questionsFor } from "./lib/labelSpecs";
 import { vActionType, vRole, vTaskStatus } from "./lib/types";
 import { taskFromEvent } from "./tasks";
+import { creaoFetch } from "./creao/http";
 
 // Dev helper: a seeded support_ticket event, routed by spec 05 (→ Support task in #customer → ASSIGN).
 export const seedSupportTicket = internalMutation({
@@ -231,5 +232,22 @@ export const probeJev = internalAction({
     const questions = questionsFor(type, Boolean(findings?.length));
     const state = jevState({ action: { type, role: "dev", params, rationale }, tickets: ticket ? [ticket] : [], findings });
     return { questions: Object.keys(questions), ...(await jevDecide(questions, state)) };
+  },
+});
+
+// Dev helper: the shape of one raw Creao run (field names, status, error, short previews; never the key), for
+// diagnosing replies that arrive empty.  npx convex run dev:inspectRun '{"runId":"…"}'
+export const inspectRun = internalAction({
+  args: { runId: v.string() },
+  returns: v.any(),
+  handler: async (_ctx, { runId }) => {
+    const { json } = await creaoFetch(`/api/v1/runs/${encodeURIComponent(runId)}`);
+    const shape = (x: unknown): unknown => {
+      if (typeof x === "string") return x.length > 300 ? `${x.slice(0, 300)}… (${x.length} chars)` : x;
+      if (Array.isArray(x)) return x.slice(0, 3).map(shape);
+      if (x && typeof x === "object") return Object.fromEntries(Object.entries(x as Record<string, unknown>).map(([k, val]) => [k, shape(val)]));
+      return x;
+    };
+    return shape(json);
   },
 });
