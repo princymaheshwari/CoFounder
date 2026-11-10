@@ -114,9 +114,10 @@ export function normalizeMonitorItem(task: MonitorTask, item: unknown): MonitorS
   const after = str(it.current_excerpt);
   const body = after || before ? diffSummary(before, after) : squash(str(it.message));
   if (!body) return null;
-  // Score the changed part only (old and new), so an unchanged price elsewhere on the page doesn't count.
+  // Score the changed part only, so an unchanged price elsewhere on the page doesn't count. A price that was
+  // removed counts too (old + new); a review counts only by what was added (an older review's stars don't).
   const d = diffSegments(before, after);
-  const scored = after || before ? `${d.old ?? ""} ${d.neu}` : body;
+  const scored = !after && !before ? body : MONITOR_TASKS[task].kind === "reviews" ? d.neu : `${d.old ?? ""} ${d.neu}`;
   const change = clip(body, MAX_CHANGE);
   return {
     url,

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as apify from "../apify.js";
 import type * as audit from "../audit.js";
 import type * as bank from "../bank.js";
 import type * as channels from "../channels.js";
@@ -28,6 +29,7 @@ import type * as http from "../http.js";
 import type * as inbox from "../inbox.js";
 import type * as issues from "../issues.js";
 import type * as labels from "../labels.js";
+import type * as lib_apify from "../lib/apify.js";
 import type * as lib_catalog from "../lib/catalog.js";
 import type * as lib_co from "../lib/co.js";
 import type * as lib_envelope from "../lib/envelope.js";
@@ -59,6 +61,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  apify: typeof apify;
   audit: typeof audit;
   bank: typeof bank;
   channels: typeof channels;
@@ -79,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   inbox: typeof inbox;
   issues: typeof issues;
   labels: typeof labels;
+  "lib/apify": typeof lib_apify;
   "lib/catalog": typeof lib_catalog;
   "lib/co": typeof lib_co;
   "lib/envelope": typeof lib_envelope;

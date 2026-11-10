@@ -72,6 +72,15 @@ describe("normalizeMonitorItem and significance", () => {
     expect(reviewStars("★★☆☆☆ too expensive")).toBe(2);
   });
 
+  test("a new review is scored by its own stars, not an older review's", () => {
+    const s = normalizeMonitorItem("reviews", monitorItem({
+      url: "https://reviews.example.com/app",
+      previous_excerpt: "Latest reviews: 5/5 stars. The summaries save me an hour a week.",
+      current_excerpt: "Latest reviews: 1/5 stars. Charged twice this month, cancelling. 5/5 stars. The summaries save me an hour a week.",
+    }))!;
+    expect(s.significance).toBe(0.7);
+  });
+
   test("careers and changelog entries are 0.5", () => {
     expect(significance("competitor-careers", "https://rival.example.com/careers", "Senior ML engineer, meetings")).toBe(0.5);
     expect(significance("community", "https://rival.example.com/changelog", "New: calendar sync")).toBe(0.5);
