@@ -96,6 +96,8 @@ npx convex run story:start '{"act":"double_charge"}'   # demo acts: double_charg
 npx convex run story:primeLive   # before a pitch: reset, then send a seeded double-charge ticket through live Creao agents (~4–6 min to #founder-desk)
 npx convex run nessie:seedNessie   # seed the Nessie sandbox + customers/ledger_mirror/tickets (idempotent)
 npx convex run nessie:syncLedger   # mirror Nessie into ledger_mirror now (cron runs it every 10 min)
+npx convex run monitors:list     # spec 13: pages the company watches (synced from the company profile; checks run from the runMonitors cron)
+npx convex run monitors:setPaused '{"paused":true}'   # stop all Apify checks (setCheckInterval '{"minutes":15}' changes cadence)
 npm run inject-signal -- vendor-price   # spec 13: fake change-monitor result → /apify-callback (also competitor-price | review | careers)
 npm test                  # vitest (convex-test for functions)
 npx convex env set NAME value   # set a backend secret
@@ -148,6 +150,7 @@ This is the **only** Creao API we use. Known from Creao docs (https://docs.creao
 ### Apify — base `https://api.apify.com/v2`, `Authorization: Bearer <token>`
 - Webhook events `ACTOR.RUN.SUCCEEDED` etc.; custom `payloadTemplate` with `{{resource}}` variables. Dataset items: `GET /v2/datasets/{datasetId}/items`.
 - Change monitor: `monema/apify-change-monitor` (`scrapemint/website-change-monitor` no longer exists). Verified 2026-11-10 from its build's actorDefinition: input `{url, selector?, ignore_selectors?, min_change_ratio?, webhook_url?, state_key?, …}`, one dataset item per run `{url, final_url, status: initial_snapshot|unchanged|minor_change|changed, significant_change, change_ratio, message, current_hash, previous_hash, current_excerpt, previous_excerpt, fetched_at}`. Wired in `convex/apify.ts` + `convex/lib/apify.ts`.
+- Monitors are autonomous (`convex/monitors.ts`): no Apify Tasks, Schedules or saved webhooks. A Convex cron starts `POST /v2/acts/monema~apify-change-monitor/runs` with `?webhooks=<base64 JSON array of {eventTypes, requestUrl}>` (verified 2026-11-10, docs.apify.com/api/v2/actors-runs-post); the default webhook payload's `resource` is the run object.
 
 ## Plan constraints (founder account, Pro Plus)
 

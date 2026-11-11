@@ -70,7 +70,13 @@ With `DEMO_TOOLS=on`, the sidebar's **Demo story** replays recorded agent replie
 
 ### Apify change monitors
 
-Scheduled runs of [`monema/apify-change-monitor`](https://apify.com/monema/apify-change-monitor) watch competitor pricing, community, reviews, vendor pricing and competitor careers pages. Each Apify Task has a webhook on `ACTOR.RUN.SUCCEEDED` to `https://<deployment>.convex.site/apify-callback?token=<APIFY_WEBHOOK_TOKEN>&task=<task>`, where `<task>` is one of `competitor-pricing`, `community`, `reviews`, `vendor-pricing` or `competitor-careers`. Convex pulls the run's dataset, scores each change, drops duplicates, and opens a task for anything scoring 0.6 or more. `npm run inject-signal -- vendor-price` (or `competitor-price`, `review`, `careers`) sends a realistic change through the same path for rehearsal.
+The company watches the web on its own; there is nothing to set up in the Apify Console.
+
+- **What to watch** comes from the company profile: competitors' pricing, changelog and careers pages, vendors' pricing pages and review pages. When the founder names a competitor without a URL, Claude proposes its official pages and Convex keeps only the ones that load and name the company.
+- **Checks** run from a Convex cron (hourly per page by default). Each is a run of [`monema/apify-change-monitor`](https://apify.com/monema/apify-change-monitor) with a one-off webhook back to `/apify-callback`, so nothing is created or left behind in the Apify account.
+- **Signals:** Convex pulls the run's dataset, scores each change, drops duplicates, and opens a task for anything scoring 0.6 or more (a price change, a low-star review about bugs or cancelling).
+
+Needs `APIFY_TOKEN` and `APIFY_WEBHOOK_TOKEN` in the Convex env. `npx convex run monitors:list` shows what is watched; `monitors:setPaused '{"paused":true}'` stops all checks; `monitors:setCheckInterval '{"minutes":15}'` changes the cadence. `npm run inject-signal -- vendor-price` (or `competitor-price`, `review`, `careers`) sends a realistic change through the same path for rehearsal.
 
 ## Repo layout
 
