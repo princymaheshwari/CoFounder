@@ -9,7 +9,7 @@ import { assign } from "./dispatcher";
 import { DEFAULT_PLAN, FLOW_RULE, MAX_RECURRING, PLAN_SYSTEM, ROLE_ROOM, nextRunAt, normalizePlan, planPrompt, planSchema, recurringBrief, type Flow, type OnboardingInput, type PlanTask } from "./lib/recurring";
 import { nextRuleLabel } from "./lib/rules";
 import { postRulesDigest } from "./rules";
-import { insertTask } from "./tasks";
+import { insertTask, taskFromEvent } from "./tasks";
 
 // Onboarding (#start): the founder describes the company, Claude proposes recurring work per department,
 // the founder confirms, and each recurring task gets a thread in its owner's channel with a first live run.
@@ -201,17 +201,21 @@ export const confirm = mutation({
 
 const PAUSE_KEY = "recurring_paused";
 
-async function recurringPaused(ctx: MutationCtx): Promise<boolean> {
+// Also read by apify.saveSignals: while paused, significant signals wait instead of opening tasks.
+export async function recurringPaused(ctx: MutationCtx): Promise<boolean> {
   const row = await ctx.db.query("config").withIndex("by_key", (q) => q.eq("key", PAUSE_KEY)).unique();
   return row?.value === true;
 }
 
+const MAX_RELEASE = 20;
+
 // Stops (or resumes) every recurring run without deleting the schedule, e.g. while Creao credits are out.
+// Significant Apify signals that arrive meanwhile are held as unprocessed events; resuming opens their tasks.
 //   npx convex run onboarding:setRecurringPaused '{"paused":true}'
 // Resuming restarts each interval from now, so the runs missed while paused don't all fire at once.
 export const setRecurringPaused = internalMutation({
   args: { paused: v.boolean() },
-  returns: v.object({ paused: v.boolean(), schedules: v.number() }),
+  returns: v.object({ paused: v.boolean(), schedules: v.number(), released: v.number() }),
   handler: async (ctx, { paused }) => {
     const row = await ctx.db.query("config").withIndex("by_key", (q) => q.eq("key", PAUSE_KEY)).unique();
     if (row) await ctx.db.patch("config", row._id, { value: paused });
@@ -221,11 +225,19 @@ export const setRecurringPaused = internalMutation({
       .withIndex("by_active_and_next_run_at", (q) => q.eq("active", true))
       .take(MAX_RECURRING * 4);
     const now = Date.now();
+    let released = 0;
     if (!paused) {
       for (const r of active) if (r.every_ms) await ctx.db.patch("recurring", r._id, { next_run_at: nextRunAt(r.every_ms, now) });
+      const held = await ctx.db
+        .query("events")
+        .withIndex("by_processed", (q) => q.eq("processed", false))
+        .take(200);
+      for (const e of held.filter((x) => x.source === "apify").slice(0, MAX_RELEASE)) {
+        if (await taskFromEvent(ctx, e._id)) released += 1;
+      }
     }
-    await audit(ctx, { actor: "founder", kind: paused ? "recurring_paused" : "recurring_resumed", ref: PAUSE_KEY, detail: { schedules: active.length } });
-    return { paused, schedules: active.length };
+    await audit(ctx, { actor: "founder", kind: paused ? "recurring_paused" : "recurring_resumed", ref: PAUSE_KEY, detail: { schedules: active.length, released } });
+    return { paused, schedules: active.length, released };
   },
 });
 

@@ -170,6 +170,31 @@ describe("/apify-callback → signals → tasks", () => {
     });
   });
 
+  test("while agent runs are paused a significant signal waits, and resuming opens its task", async () => {
+    const t = setup();
+    await t.mutation(internal.seed.config, {});
+    await t.mutation(internal.onboarding.setRecurringPaused, { paused: true });
+    const res = await t.mutation(internal.apify.saveSignals, {
+      task: "vendor-pricing",
+      runId: "r-held",
+      items: 1,
+      signals: [{ url: "https://vendor.example.com/pricing", change: "$20 → $26 per seat", significance: 0.9, evidence_url: "https://vendor.example.com/pricing", change_hash: "held1" }],
+    });
+    expect(res).toMatchObject({ saved: 1, held: 1 });
+    await t.run(async (ctx) => {
+      expect(await ctx.db.query("tasks").collect()).toHaveLength(0);
+      expect((await ctx.db.query("events").collect())[0]).toMatchObject({ type: "signal.vendor_price", processed: false });
+      const notes = (await ctx.db.query("messages").collect()).filter((m) => m.text.includes("Agent runs are paused"));
+      expect(notes).toHaveLength(1);
+    });
+    expect(await t.mutation(internal.onboarding.setRecurringPaused, { paused: false })).toMatchObject({ paused: false, released: 1 });
+    await t.run(async (ctx) => {
+      const tasks = await ctx.db.query("tasks").collect();
+      expect(tasks.map((x) => x.role)).toEqual(["spend"]);
+      expect((await ctx.db.query("events").collect())[0].processed).toBe(true);
+    });
+  });
+
   test("a low-significance change is kept for standups without a task", async () => {
     const t = setup();
     await t.mutation(internal.seed.config, {});

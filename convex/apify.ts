@@ -2,7 +2,8 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { env, httpAction, internalAction, internalMutation } from "./_generated/server";
-import { audit } from "./channels";
+import { appendMessage, audit } from "./channels";
+import { recurringPaused } from "./onboarding";
 import {
   EVENT_THRESHOLD,
   MONITOR_TASKS,
@@ -85,13 +86,17 @@ const vSignal = v.object({ url: v.string(), change: v.string(), significance: v.
 // Stores new signals (a repeated webhook or an unchanged page adds nothing) and turns significant ones into tasks.
 export const saveSignals = internalMutation({
   args: { task: vTask, runId: v.string(), signals: v.array(vSignal), items: v.number(), error: v.optional(v.string()) },
-  returns: v.object({ saved: v.number(), events: v.array(v.id("events")) }),
+  returns: v.object({ saved: v.number(), events: v.array(v.id("events")), held: v.number() }),
   handler: async (ctx, { task, runId, signals, items, error }) => {
     const cfg = MONITOR_TASKS[task];
     const room = await roomByName(ctx, cfg.room);
     const now = Date.now();
     const events: Id<"events">[] = [];
+    // While recurring agent runs are paused (e.g. Creao credits are out), a significant signal becomes an event
+    // but opens no task: onboarding.setRecurringPaused({paused: false}) releases it.
+    const paused = await recurringPaused(ctx);
     let saved = 0;
+    let held = 0;
     for (const s of signals) {
       const dup = await ctx.db
         .query("signals")
@@ -111,9 +116,19 @@ export const saveSignals = internalMutation({
       });
       await ctx.db.patch(signalId, { consumed: true });
       events.push(eventId);
+      if (paused) {
+        held += 1;
+        await appendMessage(ctx, {
+          room,
+          sender_kind: "system",
+          sender_name: "Dispatcher",
+          text: `[Dispatcher] Company Radar (Apify) spotted a change on ${s.url} (significance ${s.significance}). Agent runs are paused, so it waits here until they resume.`,
+        });
+        continue;
+      }
       await taskFromEvent(ctx, eventId);
     }
-    await audit(ctx, { actor: "apify", kind: "apify_ingest", ref: runId, detail: { task, items, saved, events: events.length, error: error ?? null } });
-    return { saved, events };
+    await audit(ctx, { actor: "apify", kind: "apify_ingest", ref: runId, detail: { task, items, saved, events: events.length, held, error: error ?? null } });
+    return { saved, events, held };
   },
 });
