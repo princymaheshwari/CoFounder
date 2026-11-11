@@ -14,6 +14,7 @@ export const MONITOR_TASKS = {
   reviews: { room: "#customer", event: "signal.reviews", kind: "reviews" },
   "vendor-pricing": { room: "#finance", event: "signal.vendor_price", kind: "pricing" },
   "competitor-careers": { room: "#leadership", event: "signal.leadership", kind: "entries" },
+  "competitor-changelog": { room: "#marketing", event: "signal.marketing", kind: "entries" },
 } as const;
 
 export type MonitorTask = keyof typeof MONITOR_TASKS;
@@ -136,6 +137,7 @@ export function signalBrief(task: MonitorTask, s: Pick<MonitorSignal, "url" | "c
     reviews: "A new low-star public review mentions price, bugs or cancelling.",
     "vendor-pricing": "One of our vendors changed its pricing page. Work out the monthly impact from the ledger.",
     "competitor-careers": "A competitor posted a new careers or changelog entry.",
+    "competitor-changelog": "A competitor shipped something new (changelog / release notes).",
   };
   return `${lead[task]} Change on ${s.url} (significance ${s.significance}): ${s.change}`;
 }

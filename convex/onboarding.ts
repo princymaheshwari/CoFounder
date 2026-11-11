@@ -158,6 +158,8 @@ export const confirm = mutation({
         ...(competitors?.length ? { competitors } : {}),
         updated_at: now,
       });
+      // Competitors to watch: find pages the founder didn't give, then start monitoring (monitors.ts).
+      await ctx.scheduler.runAfter(0, internal.monitors.discover, {});
     }
 
     const earlier = await ctx.db

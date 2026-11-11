@@ -289,6 +289,21 @@ export default defineSchema({
     .index("by_room", ["room"])
     .index("by_url_and_change_hash", ["url", "change_hash"]),
 
+  // Autonomous Apify monitors (spec 13): pages the company watches, derived from the company profile.
+  monitors: defineTable({
+    watch: v.string(), // a MONITOR_TASKS key: the watch list, which decides channel and event
+    url: v.string(),
+    label: v.string(),
+    active: v.boolean(),
+    last_run_at: v.number(), // 0 = never checked (due now, takes the baseline snapshot)
+    apify_run_id: v.optional(v.string()),
+    last_error: v.optional(v.string()),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_url_and_watch", ["url", "watch"])
+    .index("by_active_and_last_run_at", ["active", "last_run_at"]),
+
   post_queue: defineTable({
     action: v.id("actions"),
     channel: v.string(),

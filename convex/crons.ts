@@ -15,4 +15,10 @@ crons.interval("syncLedger", { minutes: 10 }, internal.nessie.syncLedger, {});
 // Starts the next run of each due recurring task from onboarding, in its existing thread.
 crons.interval("runRecurring", { minutes: 1 }, internal.onboarding.runDue, {});
 
+// Keeps the Apify watch list matched to the company profile and starts due page checks (spec 13).
+crons.interval("runMonitors", { minutes: 5 }, internal.monitors.runDue, {});
+
+// Finds official pages for competitors and vendors the profile has no URL for (each name retried at most weekly).
+crons.interval("discoverMonitors", { hours: 24 }, internal.monitors.discover, {});
+
 export default crons;
