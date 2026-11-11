@@ -93,17 +93,18 @@ type Gap = { kind: "competitor" | "vendor"; name: string };
 
 export const discoveryContext = internalQuery({
   args: { now: v.number() },
-  returns: v.object({ context: v.string(), gaps: v.array(v.object({ kind: v.union(v.literal("competitor"), v.literal("vendor")), name: v.string() })) }),
+  returns: v.object({ paused: v.boolean(), context: v.string(), gaps: v.array(v.object({ kind: v.union(v.literal("competitor"), v.literal("vendor")), name: v.string() })) }),
   handler: async (ctx, { now }) => {
+    const paused = (await ctx.db.query("config").withIndex("by_key", (q) => q.eq("key", PAUSE_KEY)).unique())?.value === true;
     const company = await ctx.db.query("company").first();
-    if (!company) return { context: "", gaps: [] };
+    if (paused || !company) return { paused, context: "", gaps: [] };
     const tried = ((await ctx.db.query("config").withIndex("by_key", (q) => q.eq("key", DISCOVERY_KEY)).unique())?.value ?? {}) as Record<string, number>;
     const fresh = (name: string) => !(tried[name] && now - tried[name] < DISCOVERY_RETRY_MS);
     const gaps: Gap[] = [
       ...company.competitors.filter((c) => !c.pricing_url || !c.changelog_url || !c.careers_url).map((c) => ({ kind: "competitor" as const, name: c.name })),
       ...company.vendors.filter((x) => !x.pricing_url).map((x) => ({ kind: "vendor" as const, name: x.name })),
     ].filter((g) => fresh(g.name));
-    return { context: `${company.product} (${company.description})`.slice(0, 300), gaps: gaps.slice(0, 8) };
+    return { paused, context: `${company.product} (${company.description})`.slice(0, 300), gaps: gaps.slice(0, 8) };
   },
 });
 
@@ -119,13 +120,15 @@ async function confirmPage(name: string, raw: string | null): Promise<string | n
   }
 }
 
-// Fills in competitor and vendor pages the profile lacks, then syncs. A name is retried at most weekly; a page
+// Fills in competitor and vendor pages the profile lacks, then syncs. Does nothing while monitors are paused
+// (monitors:setPaused), so a pause stops both Apify and AI Gateway spend. A name is retried at most weekly; a page
 // is saved only after it loads and names the company, so an invented URL is never watched.
 export const discover = internalAction({
   args: {},
   returns: v.object({ checked: v.number(), found: v.number() }),
   handler: async (ctx): Promise<{ checked: number; found: number }> => {
-    const { context, gaps }: { context: string; gaps: Gap[] } = await ctx.runQuery(internal.monitors.discoveryContext, { now: Date.now() });
+    const { paused, context, gaps }: { paused: boolean; context: string; gaps: Gap[] } = await ctx.runQuery(internal.monitors.discoveryContext, { now: Date.now() });
+    if (paused) return { checked: 0, found: 0 };
     let found = 0;
     for (const g of gaps) {
       let pages = { pricing_url: null as string | null, changelog_url: null as string | null, careers_url: null as string | null };

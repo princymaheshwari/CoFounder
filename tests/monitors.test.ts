@@ -102,11 +102,17 @@ describe("runDue and startRun", () => {
     expect(await t.mutation(internal.monitors.sync, {})).toMatchObject({ removed: 2, active: 1 });
   });
 
-  test("pausing stops all checks", async () => {
+  test("pausing stops all checks and discovery (no Apify or Claude calls)", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
     const t = setup();
     await t.mutation(internal.seed.config, {});
     await t.mutation(internal.monitors.setPaused, { paused: true });
     expect(await t.mutation(internal.monitors.runDue, {})).toBe(0);
+    expect(await t.action(internal.monitors.discover, {})).toEqual({ checked: 0, found: 0 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    const kinds = await t.run(async (ctx) => (await ctx.db.query("audit_log").collect()).map((r) => r.kind));
+    expect(kinds).not.toContain("monitor_discovery");
   });
 
   test("startRun starts the change monitor with the page, its state key and the one-off webhook", async () => {

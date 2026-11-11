@@ -76,7 +76,7 @@ The company watches the web on its own; there is nothing to set up in the Apify 
 - **Checks** run from a Convex cron (hourly per page by default). Each is a run of [`monema/apify-change-monitor`](https://apify.com/monema/apify-change-monitor) with a one-off webhook back to `/apify-callback`, so nothing is created or left behind in the Apify account.
 - **Signals:** Convex pulls the run's dataset, scores each change, drops duplicates, and opens a task for anything scoring 0.6 or more (a price change, a low-star review about bugs or cancelling). While agent runs are paused (`npx convex run onboarding:setRecurringPaused '{"paused":true}'`), those signals wait in their channel; resuming opens their tasks.
 
-Needs `APIFY_TOKEN` and `APIFY_WEBHOOK_TOKEN` in the Convex env. `npx convex run monitors:list` shows what is watched; `monitors:setPaused '{"paused":true}'` stops all checks; `monitors:setCheckInterval '{"minutes":15}'` changes the cadence. `npm run inject-signal -- vendor-price` (or `competitor-price`, `review`, `careers`) sends a realistic change through the same path for rehearsal.
+Needs `APIFY_TOKEN` and `APIFY_WEBHOOK_TOKEN` in the Convex env. `npx convex run monitors:list` shows what is watched; `monitors:setPaused '{"paused":true}'` stops all checks and page discovery; `monitors:setCheckInterval '{"minutes":15}'` changes the cadence. `npm run inject-signal -- vendor-price` (or `competitor-price`, `review`, `careers`) sends a realistic change through the same path for rehearsal.
 
 ## Repo layout
 
